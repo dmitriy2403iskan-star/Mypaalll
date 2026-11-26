@@ -1,0 +1,133 @@
+name: Android APK
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Зависимости приложения
+        run: npm ci --no-audit --no-fund
+
+      - name: Урезанная копия для телефона
+        run: |
+          mkdir -p build/mobile
+          rsync -aL --exclude android --exclude .git --exclude build --exclude data ./ build/mobile/
+          node scripts/prune-for-mobile.js build/mobile
+          mkdir -p android/app/src/main/assets
+          (cd build/mobile && zip -qr ../../android/app/src/main/assets/app.zip package.json src public stubs node_modules)
+          ls -lh android/app/src/main/assets/app.zip
+
+      - name: Node.js для Android (из пакетов Termux)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq patchelf
+          for pair in aarch64:arm64-v8a arm:armeabi-v7a x86_64:x86_64; do
+            python3 android/tools/fetch_termux_node.py --arch "${pair%%:*}" --abi "${pair##*:}" \
+              --jni android/app/src/main/jniLibs --assets android/app/src/main/assets
+          done
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Сборка APK
+        run: gradle -p android assembleRelease assembleDebug --no-daemon --stacktrace
+
+      - name: Переименование
+        run: |
+          mkdir -p apk
+          for f in android/app/build/outputs/apk/release/*.apk; do
+            n=$(basename "$f" | sed -e 's/app-//' -e 's/-release//' -e 's/universal/all/')
+            cp "$f" "apk/mypal-${n}"
+          done
+          cp android/app/build/outputs/apk/debug/app-x86_64-debug.apk apk-test-x86_64.apk
+          ls -lh apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mypal-apk
+          path: apk/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mypal-apk-test
+          path: apk-test-x86_64.apk
+
+  # Проверка в эмуляторе: Node запускается, панель отвечает, HTTPS к API работает
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mypal-apk-test
+
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - name: Запуск в эмуляторе Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r apk-test-x86_64.apk
+            adb shell pm grant com.mypal.app android.permission.POST_NOTIFICATIONS || true
+            adb shell am start -n com.mypal.app/.MainActivity
+            adb forward tcp:3000 tcp:3000
+            ok=0; for i in $(seq 1 120); do if curl -sf http://127.0.0.1:3000/api/settings > /dev/null; then ok=1; echo "Панель отвечает через ${i}x2 c"; break; fi; sleep 2; done
+            echo '----- node.log'; adb shell run-as com.mypal.app cat files/node.log || true
+            test "$ok" = 1
+            curl -sf http://127.0.0.1:3000/api/pals
+            echo; echo '----- HTTPS из Node (ожидаем ответ API, а не ошибку TLS):'
+            out=$(curl -s -X POST http://127.0.0.1:3000/api/providers/openai/test); echo "$out"
+            echo "$out" | grep -E 'HTTP 40[0-9]' > /dev/null
+
+  release:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mypal-apk
+          path: apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: MyPal APK №${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            **Какой файл качать:** `mypal-arm64-v8a.apk` — почти все современные телефоны. Не уверен — бери `mypal-all.apk`.
+            Установка: открой файл на телефоне → разреши установку из этого источника.
+            Ветка: `${{ github.ref_name }}`, коммит `${{ github.sha }}`.
+          files: apk/*.apk

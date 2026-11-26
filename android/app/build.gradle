@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+// версия из CI (номер сборки) или 1 при локальной сборке
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+
+android {
+    namespace 'com.mypal.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.mypal.app'
+        minSdk 24
+        targetSdk 35
+        versionCode buildNumber
+        versionName "0.4.${buildNumber}"
+    }
+
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            universalApk true
+        }
+    }
+
+    packaging {
+        // Node и его библиотеки должны лежать распакованными в nativeLibraryDir — только оттуда Android разрешает запуск
+        jniLibs { useLegacyPackaging true }
+    }
+
+    androidResources {
+        // app.zip уже сжат
+        noCompress 'zip'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // подписываем debug-ключом, чтобы APK ставился без настройки keystore
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
