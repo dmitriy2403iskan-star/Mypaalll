@@ -83,6 +83,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: mypal-apk-test
@@ -100,18 +102,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            adb install -r apk-test-x86_64.apk
-            adb shell pm grant com.mypal.app android.permission.POST_NOTIFICATIONS || true
-            adb shell am start -n com.mypal.app/.MainActivity
-            adb forward tcp:3000 tcp:3000
-            ok=0; for i in $(seq 1 120); do if curl -sf http://127.0.0.1:3000/api/settings > /dev/null; then ok=1; echo "Панель отвечает через ${i}x2 c"; break; fi; sleep 2; done
-            echo '----- node.log'; adb shell run-as com.mypal.app cat files/node.log || true
-            test "$ok" = 1
-            curl -sf http://127.0.0.1:3000/api/pals
-            echo; echo '----- HTTPS из Node (ожидаем ответ API, а не ошибку TLS):'
-            out=$(curl -s -X POST http://127.0.0.1:3000/api/providers/openai/test); echo "$out"
-            echo "$out" | grep -E 'HTTP 40[0-9]' > /dev/null
+          script: bash android/tools/emulator-test.sh apk-test-x86_64.apk
 
   release:
     needs: [build, test]
