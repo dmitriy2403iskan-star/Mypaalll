@@ -1,0 +1,29 @@
+{
+  "name": "mypal",
+  "version": "0.1.0",
+  "description": "AI-компаньон для Minecraft (аналог MinePal) на собственных API-ключах: Mineflayer + любой LLM-провайдер + память + планировщик + веб-панель",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning src/index.js",
+    "dev": "node --watch --no-warnings=ExperimentalWarning src/index.js",
+    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "minecraft-data": "^3.119.0",
+    "mineflayer": "^4.39.0",
+    "mineflayer-collectblock": "^1.6.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "mineflayer-pvp": "^1.3.2",
+    "prismarine-item": "^1.18.0",
+    "vec3": "^0.2.0",
+    "ws": "^8.23.0"
+  }
+}

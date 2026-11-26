@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyPal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">⛏ MyPal</div>
+    <nav id="tabs">
+      <button data-tab="dashboard" class="active">Дашборд</button>
+      <button data-tab="chat">Чат</button>
+      <button data-tab="pals">Pals</button>
+      <button data-tab="memory">Память</button>
+      <button data-tab="tasks">Задачи</button>
+      <button data-tab="settings">Настройки</button>
+    </nav>
+    <div id="conn" class="pill">●</div>
+  </header>
+
+  <main>
+    <!-- ДАШБОРД -->
+    <section id="tab-dashboard" class="tab active">
+      <div id="palCards" class="grid"></div>
+      <h3>Журнал</h3>
+      <div id="log" class="log"></div>
+    </section>
+
+    <!-- ЧАТ -->
+    <section id="tab-chat" class="tab">
+      <div class="row">
+        <label>Pal <select id="chatPal" class="palSelect"></select></label>
+        <label>Пишу как <input id="chatFrom" placeholder="твой ник"></label>
+        <label class="check"><input type="checkbox" id="ttsOn"> Озвучивать ответы</label>
+      </div>
+      <div id="chatBox" class="chat"></div>
+      <form id="chatForm" class="row">
+        <input id="chatInput" placeholder="Алекс, пойдём строить дом у реки…" autocomplete="off">
+        <button type="button" id="micBtn" title="Голосовой ввод">🎤</button>
+        <button>Отправить</button>
+        <button type="button" id="stopBtn" class="danger">Стоп</button>
+      </form>
+    </section>
+
+    <!-- PALS -->
+    <section id="tab-pals" class="tab">
+      <div class="split">
+        <div>
+          <h3>Мои Pals</h3>
+          <div id="palList" class="list"></div>
+          <button id="newPal">+ Новый Pal</button>
+        </div>
+        <form id="palForm" class="card form">
+          <h3 id="palFormTitle">Pal</h3>
+          <input type="hidden" name="id">
+          <label>Имя (ник в Minecraft) <input name="name" required pattern="[A-Za-z0-9_]{3,16}"></label>
+          <label>Хозяин (твой ник) <input name="owner"></label>
+          <label>Личность <textarea name="personality" rows="5" placeholder="Весёлый исследователь, любит шутить про криперов…"></textarea></label>
+          <div class="sliders">
+            <label>Юмор <input type="range" min="0" max="1" step="0.1" name="humor"></label>
+            <label>Готовность помочь <input type="range" min="0" max="1" step="0.1" name="helpfulness"></label>
+            <label>Многословность <input type="range" min="0" max="1" step="0.1" name="verbosity"></label>
+            <label>Смелость <input type="range" min="0" max="1" step="0.1" name="bravery"></label>
+          </div>
+          <label>LLM-провайдер <select name="provider" class="providerSelect"><option value="">(глобальный)</option></select></label>
+          <div class="row">
+            <button>Сохранить</button>
+            <button type="button" id="deletePal" class="danger">Удалить</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ПАМЯТЬ -->
+    <section id="tab-memory" class="tab">
+      <div class="row"><label>Pal <select id="memPal" class="palSelect"></select></label></div>
+      <div class="split">
+        <div>
+          <h3>Воспоминания</h3>
+          <form id="memForm" class="row">
+            <select name="kind"><option value="semantic">факт</option><option value="episodic">событие</option></select>
+            <input name="content" placeholder="Игрок любит деревянные дома" required>
+            <button>Добавить</button>
+          </form>
+          <div id="memList" class="list"></div>
+        </div>
+        <div>
+          <h3>Места</h3>
+          <div id="locList" class="list"></div>
+          <h3>Последний разговор</h3>
+          <div id="convo" class="log small"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ЗАДАЧИ -->
+    <section id="tab-tasks" class="tab">
+      <div class="row"><label>Pal <select id="taskPal" class="palSelect"></select></label></div>
+      <div id="taskList" class="list"></div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section id="tab-settings" class="tab">
+      <form id="settingsForm">
+        <div class="card">
+          <h3>Нейросеть (LLM)</h3>
+          <p class="hint">Ключи хранятся только у тебя: в <code>data/settings.json</code>. Меняются на лету, без перезапуска. Пустое поле ключа = не менять.</p>
+          <div class="row">
+            <label>Активный провайдер <select name="llm.activeProvider" class="providerSelect"></select></label>
+            <label>Провайдер для памяти <select name="llm.memoryProvider" class="providerSelect"><option value="">(тот же)</option></select></label>
+          </div>
+          <table class="providers">
+            <thead><tr><th>Провайдер</th><th>Тип</th><th>Base URL</th><th>Модель</th><th>API-ключ</th><th></th></tr></thead>
+            <tbody id="providerRows"></tbody>
+          </table>
+          <details>
+            <summary>Добавить своего провайдера (OpenAI-совместимый)</summary>
+            <div class="row">
+              <input id="newProvId" placeholder="id, например together">
+              <input id="newProvUrl" placeholder="https://api.together.xyz/v1">
+              <input id="newProvModel" placeholder="модель">
+              <button type="button" id="addProv">Добавить</button>
+            </div>
+          </details>
+        </div>
+
+        <div class="card">
+          <h3>Minecraft</h3>
+          <div class="row">
+            <label>Хост <input name="minecraft.host"></label>
+            <label>Порт <input name="minecraft.port" type="number"></label>
+            <label>Версия <input name="minecraft.version" placeholder="авто"></label>
+            <label>Авторизация
+              <select name="minecraft.auth"><option value="offline">offline</option><option value="microsoft">microsoft</option></select>
+            </label>
+          </div>
+          <p class="hint">Для одиночного мира: Esc → «Открыть для сети» → укажи показанный порт.</p>
+        </div>
+
+        <div class="card">
+          <h3>Агент</h3>
+          <div class="row">
+            <label>Макс. шагов за ход <input name="agent.maxSteps" type="number" min="1" max="50"></label>
+            <label>Temperature <input name="agent.temperature" type="number" step="0.1" min="0" max="2"></label>
+            <label>Отвечать <select name="agent.respondTo"><option value="mention">по имени / хозяину</option><option value="all">на всё</option></select></label>
+            <label>Язык <select name="agent.language"><option value="ru">русский</option><option value="en">English</option></select></label>
+            <label class="check"><input type="checkbox" name="agent.memoryExtraction"> Авто-память</label>
+          </div>
+          <h3>Рефлексы</h3>
+          <div class="row">
+            <label class="check"><input type="checkbox" name="reflex.autoEat"> Автоеда</label>
+            <label class="check"><input type="checkbox" name="reflex.selfDefense"> Самооборона</label>
+            <label class="check"><input type="checkbox" name="reflex.avoidDrowning"> Не тонуть</label>
+            <label>Убегать при HP ≤ <input name="reflex.fleeHealth" type="number" min="0" max="20"></label>
+          </div>
+        </div>
+        <button>Сохранить настройки</button>
+        <span id="settingsMsg" class="hint"></span>
+      </form>
+    </section>
+  </main>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
