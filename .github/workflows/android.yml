@@ -30,7 +30,8 @@ jobs:
       - name: Урезанная копия для телефона
         run: |
           mkdir -p build/mobile
-          rsync -aL --exclude android --exclude .git --exclude build --exclude data ./ build/mobile/
+          rsync -aL --exclude /android --exclude /.git --exclude /build --exclude /data ./ build/mobile/
+          test -f build/mobile/node_modules/minecraft-data/minecraft-data/data/dataPaths.json
           node scripts/prune-for-mobile.js build/mobile
           mkdir -p android/app/src/main/assets
           (cd build/mobile && zip -qr ../../android/app/src/main/assets/app.zip package.json src public stubs node_modules)
