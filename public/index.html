@@ -37,6 +37,7 @@
       <div id="palCards" class="grid"></div>
       <h3>Расход LLM сегодня</h3>
       <div id="usageBox" class="list"><div class="hint">Пока запросов не было.</div></div>
+      <p class="hint versions-line" data-versions="all"></p>
       <h3>Журнал</h3>
       <div id="log" class="log"></div>
     </section>
@@ -155,6 +156,7 @@
                 <select name="minecraft.auth"><option value="offline">offline</option><option value="microsoft">microsoft</option></select>
               </label>
             </div>
+            <p class="hint versions-line" data-versions="java"></p>
             <p class="hint">Одиночный мир: Esc → «Открыть для сети» → укажи показанный порт. Bedrock-игроки могут зайти на Java-сервер через GeyserMC — тогда pal работает в полном режиме.</p>
           </div>
           <div data-edition="bedrock">
@@ -167,6 +169,7 @@
               <label>Realm (имя) <input name="minecraft.bedrock.realm" placeholder="необязательно"></label>
               <label>Версия <input name="minecraft.bedrock.version" placeholder="авто"></label>
             </div>
+            <p class="hint versions-line" data-versions="bedrock"></p>
             <p class="hint">В Bedrock pal действует командами (/tp, /fill, /setblock, /give): в мире должны быть <b>включены читы</b>, а боту нужно дать права <b>оператора</b>. При входе через Microsoft код появится в журнале на дашборде — у бота должен быть свой аккаунт.</p>
           </div>
         </div>

@@ -105,3 +105,5 @@ code { background: var(--panel2); padding: 1px 4px; border-radius: 4px; }
 .cmd { display: inline-flex; align-items: center; gap: 2px; margin: 2px 4px 2px 0; white-space: nowrap; max-width: 100%; }
 .cmd code { overflow: hidden; text-overflow: ellipsis; }
 .copy { background: transparent; color: var(--muted); padding: 0 4px; font-weight: 400; }
+.ver { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; }
+.versions-line { margin-top: 10px; }

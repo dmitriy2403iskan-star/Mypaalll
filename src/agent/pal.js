@@ -17,6 +17,7 @@ import { LimitExhaustedError } from '../llm/usage.js';
 import { BedrockBody } from '../bedrock/body.js';
 import { startBedrockModes } from '../bedrock/actions.js';
 import minecraftData from 'minecraft-data';
+import { checkVersion, supportedVersions } from '../versions.js';
 
 const STOP_WORDS = /^(стоп|stop|хватит|остановись|замри|halt)[!. ]*$/i;
 const MAX_AUTO_CONTINUE = 6;
@@ -72,6 +73,9 @@ export class Pal extends EventEmitter {
     if (this.bot) return;
     const mc = settings.get().minecraft;
     const bedrock = mc.edition === 'bedrock';
+    const wanted = bedrock ? mc.bedrock?.version : mc.version;
+    const bad = checkVersion(bedrock ? 'bedrock' : 'java', wanted || null);
+    if (bad) { this.log('error', bad); return; }
     this.status = 'connecting';
     this.leftDueToLimit = false;
     this.emit('status');
@@ -93,9 +97,13 @@ export class Pal extends EventEmitter {
       if (bedrock) {
         this.stopModes = startBedrockModes(this);
         this.log('system', `В мире Bedrock! Версия ${bot.version || '?'}. Для действий нужны читы и права оператора.`);
+        const warn = checkVersion('bedrock', bot.version);
+        if (warn) this.log('error', warn);
       } else {
         this.reflex = new ReflexEngine(this);
         this.log('system', `В мире! Версия ${bot.version}`);
+        const warn = checkVersion('java', bot.version);
+        if (warn) this.log('error', warn);
       }
       this.emit('status');
       if (this.profile.owner) setTimeout(() => this.say(`Привет, ${this.profile.owner}! Я тут.`), 1500);
@@ -103,8 +111,15 @@ export class Pal extends EventEmitter {
     bot.on('chat', (username, message) => this.onChat(username, message, false));
     bot.on('whisper', (username, message) => this.onChat(username, message, true));
     bot.on('death', () => { this.log('system', 'Я погиб...'); this.memory.add('episodic', `Погиб в ${JSON.stringify(this.snapshot()?.position)}`, 2); this.stopAll(); });
-    bot.on('kicked', (reason) => this.log('error', `Кикнули: ${typeof reason === 'string' ? reason : JSON.stringify(reason)}`));
-    bot.on('error', (err) => this.log('error', `Ошибка соединения: ${err.message}`));
+    // понятные подсказки, если сервер на неподдерживаемой версии
+    const versionHint = (text) => (/version|outdated|protocol|unsupported|не поддерж/i.test(text)
+      ? ` Похоже, версия сервера не совпадает. MyPal поддерживает: ${supportedVersions().text}. Укажи версию сервера в Настройках → Minecraft или обнови игру/MyPal.`
+      : '');
+    bot.on('kicked', (reason) => {
+      const text = typeof reason === 'string' ? reason : JSON.stringify(reason);
+      this.log('error', `Кикнули: ${text}.${versionHint(text)}`);
+    });
+    bot.on('error', (err) => this.log('error', `Ошибка соединения: ${err.message}.${versionHint(err.message)}`));
     bot.on('end', (reason) => {
       this.log('system', `Отключён (${reason})`);
       this.reflex?.destroy();

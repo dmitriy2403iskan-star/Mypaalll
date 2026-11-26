@@ -24,7 +24,7 @@ async function run(pal, plan, args, title) {
   if (r.note) return r.note;
   pal.memory.add('episodic', `Построил ${plan.summary} в ${origin}`, 3);
   if (args.remember_as) pal.memory.saveLocation(args.remember_as, origin.offset(Math.floor(plan.size.w / 2), 1, -1), bot.game.dimension);
-  const parts = [`${title} готов: ${plan.summary}. Поставлено ${r.placed}, выкопано ${r.dug}. Угол ${origin}.`];
+  const parts = [`${title} — готово: ${plan.summary}. Поставлено ${r.placed}, выкопано ${r.dug}. Угол ${origin}.`];
   if (r.skipped.length) parts.push(`Пропущено: ${r.skipped.slice(0, 5).join('; ')}.`);
   if (r.failed.length) parts.push(`Не получилось ${r.failed.length}: ${r.failed.slice(0, 3).join('; ')}.`);
   if (!r.placed && !r.dug) throw new ActionError(parts.join(' '));

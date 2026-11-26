@@ -10,6 +10,7 @@ import { manager } from '../agent/manager.js';
 import { testProvider } from '../llm/router.js';
 import { ACTIONS, runAction } from '../actions/index.js';
 import { usage } from '../llm/usage.js';
+import { supportedVersions } from '../versions.js';
 
 export function startServer({ port = 3000, host = '127.0.0.1' } = {}) {
   const app = express();
@@ -90,6 +91,9 @@ export function startServer({ port = 3000, host = '127.0.0.1' } = {}) {
   // ---------- задачи ----------
   app.get('/api/pals/:id/tasks', wrap((req) => palOf(req).tasks.list()));
   app.post('/api/pals/:id/tasks/:tid/status', wrap((req) => palOf(req).tasks.setStatus(Number(req.params.tid), req.body.status)));
+
+  // ---------- поддерживаемые версии Minecraft ----------
+  app.get('/api/versions', wrap(() => supportedVersions()));
 
   // ---------- лимиты и расход ----------
   app.get('/api/usage', wrap(() => usage.summary()));

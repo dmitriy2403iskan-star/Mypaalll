@@ -119,6 +119,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           make_latest: true
           body: |
+            **Версии Minecraft:** Java 1.16.5 – 26.1 · Bedrock 1.16.201 – 1.26.60
+
             **Какой файл качать:** `mypal-arm64-v8a.apk` — почти все современные телефоны. Не уверен — бери `mypal-all.apk`.
             Установка: открой файл на телефоне → разреши установку из этого источника.
             Ветка: `${{ github.ref_name }}`, коммит `${{ github.sha }}`.

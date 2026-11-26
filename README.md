@@ -1,6 +1,8 @@
 # MyPal: ИИ-компаньон для Minecraft на своих API-ключах
 
-**Java и Bedrock. ПК, Android (Termux) и iPhone (панель по Wi-Fi)** — см. [docs/PHONE_AND_BEDROCK.md](docs/PHONE_AND_BEDROCK.md).
+**Поддерживаемые версии Minecraft: Java 1.16.5 – 26.1 · Bedrock 1.16.201 – 1.26.60.** Верхняя граница растёт с обновлением библиотек (`npm update`); точный список — в панели и на `/api/versions`.
+
+**Java и Bedrock. ПК, Android (APK или Termux) и iPhone (панель по Wi-Fi)** — см. [docs/PHONE_AND_BEDROCK.md](docs/PHONE_AND_BEDROCK.md).
 
 Аналог MinePal. Бот заходит на сервер как обычный игрок: ходит за тобой, добывает, крафтит, строит, сражается, запоминает места и факты и отвечает в чате. Нейросеть ты выбираешь сам и меняешь ключи прямо в веб-панели, без перезапуска.
 

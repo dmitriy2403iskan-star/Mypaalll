@@ -16,7 +16,7 @@ async function api(url, opts = {}) {
 }
 const toast = (e) => alert(e.message || e);
 
-const state = { pals: [], states: {}, settings: null, editingPal: null };
+const state = { pals: [], states: {}, settings: null, editingPal: null, versions: null };
 const pref = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* */ } } };
 
 // ------------------------------------------------------------- вкладки
@@ -335,9 +335,24 @@ function toggleEdition() {
 }
 $('[name="minecraft.edition"]').addEventListener('change', toggleEdition);
 
+// ------------------------------------------------------------- версии Minecraft
+async function loadVersions() {
+  try { state.versions = await api('/api/versions'); } catch { return; }
+  const v = state.versions;
+  const text = {
+    all: `✅ Поддерживаемые версии Minecraft: Java ${v.java.min} – ${v.java.max} · Bedrock ${v.bedrock.min} – ${v.bedrock.max}`,
+    java: `✅ Поддерживаются Java ${v.java.min} – ${v.java.max}. Версию можно не указывать — определится сама.`,
+    bedrock: `✅ Поддерживаются Bedrock ${v.bedrock.min} – ${v.bedrock.max} (у Bedrock нет «1.16.5», самая ранняя 1.16 — ${v.bedrock.min}). Версию можно не указывать.`,
+  };
+  $$('[data-versions]').forEach((el) => { el.textContent = text[el.dataset.versions]; });
+  const jv = $('[name="minecraft.version"]'); if (jv) jv.placeholder = `авто (${v.java.min} – ${v.java.max})`;
+  const bv = $('[name="minecraft.bedrock.version"]'); if (bv) bv.placeholder = `авто (${v.bedrock.min} – ${v.bedrock.max})`;
+}
+
 // ------------------------------------------------------------- туториал
 function loadTutor() {
   renderTutor($('#tutorRoot'), {
+    versions: state.versions,
     settings: state.settings,
     pals: state.pals,
     apiPut: (patch) => api('/api/settings', { method: 'PUT', body: patch }),
@@ -396,5 +411,6 @@ await loadPals();
 editPal(state.pals[0]?.id ?? null);
 connectWs();
 loadUsage();
+await loadVersions();
 // при первом запуске сразу показываем, как подключить pal'а к игре
 showTab(pref.get('tab', 'tutor'));

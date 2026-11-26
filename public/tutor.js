@@ -13,10 +13,11 @@ function steps(list) {
 }
 
 function javaGuide(ctx) {
-  const { pal } = ctx;
+  const { pal, versions: v } = ctx;
   return `
   <div class="card tutor-card">
     <h3>☕ Minecraft Java Edition</h3>
+    <p class="ver">✅ Поддерживаемые версии: <b>Java ${esc(v.java.min)} – ${esc(v.java.max)}</b></p>
     <p class="hint">Java — это версия для ПК из официального лаунчера. На телефонах Java нет: из APK можно подключить pal'а только к Java-серверу или к ПК в той же сети.</p>
     ${IN_APK ? '<p class="note">📱 Ты в приложении на телефоне. Если сам играешь на телефоне — тебе нужен гайд <b>Bedrock</b> (вкладка выше).</p>' : ''}
 
@@ -63,6 +64,7 @@ function javaGuide(ctx) {
 
     <h4>Не работает?</h4>
     <ul class="tfaq">
+      <li><b>«Outdated server/client», «unsupported protocol»</b> — MyPal поддерживает Java ${esc(v.java.min)} – ${esc(v.java.max)}. Проверь версию мира (видна в лаунчере) и при необходимости укажи её в Настройках → Minecraft → Версия.</li>
       <li><b>«Connection refused» / ECONNREFUSED</b> — неверный порт или мир не открыт для сети. Открой мир заново и возьми новый порт.</li>
       <li><b>Кикает «You are not white-listed» / «Failed to verify username»</b> — добавь бота в whitelist или поставь <code>online-mode=false</code>.</li>
       <li><b>Не отвечает в чате</b> — обратись по имени (<code>${esc(pal)}, …</code>) или впиши свой ник в «Хозяин». Проверь ключ в Настройках (кнопка «Проверить»).</li>
@@ -72,11 +74,12 @@ function javaGuide(ctx) {
 }
 
 function bedrockGuide(ctx) {
-  const { pal } = ctx;
+  const { pal, versions: v } = ctx;
   const sameDevice = IN_APK ? 'на этом же телефоне' : 'на этом же устройстве';
   return `
   <div class="card tutor-card">
     <h3>📱 Minecraft Bedrock (телефон, Windows, консоли)</h3>
+    <p class="ver">✅ Поддерживаемые версии: <b>Bedrock ${esc(v.bedrock.min)} – ${esc(v.bedrock.max)}</b> (у Bedrock нет версии «1.16.5» — самая ранняя 1.16 это ${esc(v.bedrock.min)})</p>
     <p class="hint">В Bedrock pal действует командами (/tp, /fill, /setblock, /give): ходит за тобой, охраняет, строит дома, выдаёт предметы, выполняет команды. Копать и крафтить руками в Bedrock он не умеет. Нужен полный режим — используй Java-сервер с Geyser (см. гайд Java).</p>
 
     <h4>1. Ключ нейросети</h4>
@@ -138,19 +141,20 @@ function bedrockGuide(ctx) {
       <li><b>Висит «Подключаюсь…»</b> — проверь, что в мире включена «Многопользовательская игра» и «Видно в LAN», телефон в Wi-Fi, порт <code>19132</code>.</li>
       <li><b>Отключается сразу после входа</b> — добавь аккаунт бота в друзья (шаг 2). Если при входе по коду ты случайно вошёл <b>своим</b> аккаунтом — смени имя pal'а во вкладке Pals: бот попросит новый код, и войди уже аккаунтом бота.</li>
       <li><b>«Команды не сработали»</b> — нет читов в мире или у бота нет оператора (шаг 6).</li>
-      <li><b>Разные версии</b> — обнови Minecraft до последней версии. MyPal поддерживает Bedrock до 1.26.60.</li>
+      <li><b>Разные версии / «Outdated client/server»</b> — MyPal поддерживает Bedrock ${esc(v.bedrock.min)} – ${esc(v.bedrock.max)}. Если игра новее — скачай свежий APK/обнови MyPal; если старее ${esc(v.bedrock.min)} — обнови игру.</li>
       ${IN_APK ? '<li><b>Бот пропадает, когда ты в игре</b> — Настройки телефона → Приложения → MyPal → Батарея → <b>Без ограничений</b> (на Xiaomi ещё включи «Автозапуск»).</li>' : ''}
       <li><b>Лимит нейросети закончился</b> — pal напишет об этом в чат и выйдет. Смени ключ в Настройках и снова нажми «Подключить».</li>
     </ul>
   </div>`;
 }
 
-export function renderTutor(root, { settings, pals, apiPut, onApplied }) {
+export function renderTutor(root, { settings, pals, versions, apiPut, onApplied }) {
   const s = settings || { minecraft: { bedrock: {} } };
   const pal = pals?.[0]?.name || 'Alex';
   let edition = root.dataset.edition || s.minecraft?.edition || (IN_APK ? 'bedrock' : 'java');
   const ctx = {
     pal,
+    versions: versions || { java: { min: '1.16.5', max: '?' }, bedrock: { min: '1.16.201', max: '?' } },
     javaHost: s.minecraft?.host || 'localhost',
     javaPort: s.minecraft?.port || '',
     bedrockHost: s.minecraft?.bedrock?.host || '127.0.0.1',
@@ -162,6 +166,7 @@ export function renderTutor(root, { settings, pals, apiPut, onApplied }) {
     root.innerHTML = `
       <div class="tutor-head">
         <h2>Как запустить pal'а в игре</h2>
+        <p class="ver">✅ Поддерживаемые версии Minecraft: <b>Java ${esc(ctx.versions.java.min)} – ${esc(ctx.versions.java.max)}</b> · <b>Bedrock ${esc(ctx.versions.bedrock.min)} – ${esc(ctx.versions.bedrock.max)}</b></p>
         <p class="hint">Выбери, в какой Minecraft играешь. <b>Java</b> — ПК, официальный лаунчер. <b>Bedrock</b> — телефон, планшет, Windows (Microsoft Store), Xbox, PlayStation, Switch.</p>
         <div class="seg">
           <button type="button" data-ed="java" class="${edition === 'java' ? 'on' : ''}">☕ Java</button>

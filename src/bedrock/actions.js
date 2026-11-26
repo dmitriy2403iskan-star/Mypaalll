@@ -3,29 +3,22 @@
 import { ActionError } from '../actions/util.js';
 import { house, simple, custom, billOfMaterials } from '../building/blueprints.js';
 import { fmt } from '../building/executor.js';
+import { blockArg, execAt, resolveBlock } from './blocks.js';
 
-// Java id → Bedrock id (где отличаются)
-const BLOCK_ALIASES = {
-  oak_door: 'wooden_door',
-  stone_bricks: 'stonebrick',
-  short_grass: 'tallgrass',
-  bricks: 'brick_block',
-  terracotta: 'hardened_clay',
-  snow_block: 'snow',
-};
 // Bedrock: ladder facing_direction 2=north 3=south 4=west 5=east (куда «смотрит» лестница)
 const LADDER_FACING = { '-1,0,0': 5, '1,0,0': 4, '0,0,-1': 3, '0,0,1': 2 };
 
 const q = (name) => `"${String(name).replace(/"/g, '')}"`;
 
-function blockSpec(op) {
-  const id = BLOCK_ALIASES[op.block] || op.block;
-  if (op.block === 'ladder' && op.attach) return `ladder ["facing_direction"=${LADDER_FACING[op.attach.join(',')] ?? 5}]`;
-  return id;
-}
-
-/** Сжимаем операции в команды: одинаковые блоки в ряд по z → один /fill. */
-export function opsToCommands(origin, ops) {
+/** Сжимаем операции в команды: одинаковые блоки в ряд по z → один /fill. version — версия Bedrock-сервера. */
+export function opsToCommands(origin, ops, version) {
+  const blockSpec = (op) => {
+    if (op.block === 'ladder' && op.attach) {
+      const f = LADDER_FACING[op.attach.join(',')] ?? 5;
+      return blockArg('ladder', version, { facing_direction: f }, f);
+    }
+    return blockArg(op.block, version);
+  };
   const abs = ops.map((op) => ({ ...op, x: origin.x + op.x, y: origin.y + op.y, z: origin.z + op.z }));
   const digs = abs.filter((o) => o.dig).sort((a, b) => b.y - a.y);
   const places = abs.filter((o) => o.block);
@@ -47,9 +40,8 @@ export function opsToCommands(origin, ops) {
   runs(plain, blockSpec);
   for (const o of attached) {
     if (/door$/.test(o.block)) {
-      const id = BLOCK_ALIASES[o.block] || o.block;
-      cmds.push(`setblock ${o.x} ${o.y} ${o.z} ${id} ["upper_block_bit"=false]`);
-      cmds.push(`setblock ${o.x} ${o.y + 1} ${o.z} ${id} ["upper_block_bit"=true]`);
+      cmds.push(`setblock ${o.x} ${o.y} ${o.z} ${blockArg(o.block, version, { upper_block_bit: false }, 0)}`);
+      cmds.push(`setblock ${o.x} ${o.y + 1} ${o.z} ${blockArg(o.block, version, { upper_block_bit: true }, 8)}`);
     } else {
       cmds.push(`setblock ${o.x} ${o.y} ${o.z} ${blockSpec(o)}`);
     }
@@ -78,14 +70,14 @@ function originFor(pal, args) {
 
 async function build(pal, plan, args, title) {
   const origin = originFor(pal, args);
-  const cmds = opsToCommands(origin, plan.ops);
+  const cmds = opsToCommands(origin, plan.ops, pal.bot.version);
   const bill = billOfMaterials(plan.ops);
   if (args.dry_run) return `${title}: ${plan.summary}. Угол ${origin.x} ${origin.y} ${origin.z}. Блоков: ${fmt(bill)}. Команд: ${cmds.length}. (Bedrock: строю командами, материалы не тратятся.)`;
   const r = await runCommands(pal, cmds);
   if (!r.ok) throw new ActionError(`Команды не сработали (нужны читы и права оператора): ${r.errors.slice(0, 2).join('; ')}`);
   pal.memory.add('episodic', `Построил ${plan.summary} в ${origin.x} ${origin.y} ${origin.z}`, 3);
   if (args.remember_as) pal.memory.saveLocation(args.remember_as, { x: origin.x + Math.floor(plan.size.w / 2), y: origin.y + 1, z: origin.z - 1 }, pal.bot.dimension);
-  return `${title} готов: ${plan.summary}. Команд выполнено ${r.ok}/${cmds.length}.${r.errors.length ? ` Ошибки: ${r.errors.slice(0, 2).join('; ')}` : ''}`;
+  return `${title} — готово: ${plan.summary}. Команд выполнено ${r.ok}/${cmds.length}.${r.errors.length ? ` Ошибки: ${r.errors.slice(0, 2).join('; ')}` : ''}`;
 }
 
 const BUILD_POS = {
@@ -101,7 +93,7 @@ export default [
     description: 'Переместиться к игроку (телепорт командой).',
     parameters: { type: 'object', properties: { player: { type: 'string' } }, required: ['player'] },
     async run(pal, { player }) {
-      const r = await pal.bot.command(`execute at ${q(player)} run tp @s ^1 ^ ^-1`);
+      const r = await pal.bot.command(execAt(pal.bot.version, player, 'tp @s ^1 ^ ^-1'));
       if (!r.success) throw new ActionError(`Не получилось: ${r.output}. Нужны читы/оператор, и игрок должен быть онлайн.`);
       return `Я рядом с ${player}.`;
     },
@@ -130,7 +122,7 @@ export default [
     parameters: { type: 'object', properties: { player: { type: 'string' }, radius: { type: 'number' } } },
     async run(pal, { player, radius = 16 }) {
       const r = Math.min(64, radius);
-      const res = await pal.bot.command(player ? `execute at ${q(player)} run kill @e[family=monster,r=${r}]` : `kill @e[family=monster,r=${r}]`);
+      const res = await pal.bot.command(player ? execAt(pal.bot.version, player, `kill @e[family=monster,r=${r}]`) : `kill @e[family=monster,r=${r}]`);
       return res.success ? `Мобы вокруг уничтожены (${res.output}).` : `Враждебных мобов рядом нет (${res.output}).`;
     },
   },
@@ -179,7 +171,8 @@ export default [
     description: 'Выдать игроку предметы командой /give (Bedrock-id предмета).',
     parameters: { type: 'object', properties: { player: { type: 'string' }, item: { type: 'string' }, count: { type: 'number' } }, required: ['player', 'item'] },
     async run(pal, { player, item, count = 1 }) {
-      const r = await pal.bot.command(`give ${q(player)} ${BLOCK_ALIASES[item] || item} ${Math.min(Math.max(1, count), 64 * 36)}`);
+      const b = resolveBlock(item, pal.bot.version);
+      const r = await pal.bot.command(`give ${q(player)} ${b.id} ${Math.min(Math.max(1, count), 64 * 36)}${b.data ? ` ${b.data}` : ''}`);
       if (!r.success) throw new ActionError(`Не вышло: ${r.output}`);
       return `Выдал ${count} ${item} игроку ${player}.`;
     },
@@ -254,8 +247,8 @@ export function startBedrockModes(pal) {
       const target = body.findPlayer(mode.player);
       const me = body.entity?.position;
       const far = !target?.position || !me || Math.hypot(target.position.x - me.x, target.position.z - me.z) > (mode.distance || 3) + 2;
-      if (far) await body.command(`execute at ${q(mode.player)} run tp @s ^1 ^ ^-${mode.distance || 2}`, 2500);
-      if (mode.type === 'guard') await body.command(`execute at ${q(mode.player)} run kill @e[family=monster,r=12]`, 2500);
+      if (far) await body.command(execAt(body.version, mode.player, `tp @s ^1 ^ ^-${mode.distance || 2}`), 2500);
+      if (mode.type === 'guard') await body.command(execAt(body.version, mode.player, 'kill @e[family=monster,r=12]'), 2500);
     } finally {
       busy = false;
     }

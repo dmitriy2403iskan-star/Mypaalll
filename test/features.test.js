@@ -149,3 +149,33 @@ test('Bedrock: чертёж → команды /fill и /setblock', async () => 
   assert.equal(new Set(names).size, names.length, 'без дубликатов');
   assert.ok(ACTIONS.find((a) => a.name === 'build_structure').parameters.properties.type.enum.includes('hut'), 'старый тип hut сохранён');
 });
+
+test('Версии: Java 1.16.5 – новейшая, Bedrock 1.16.201 – новейшая', async () => {
+  const { supportedVersions, checkVersion } = await import('../src/versions.js');
+  const v = supportedVersions();
+  assert.equal(v.java.min, '1.16.5');
+  assert.equal(v.bedrock.min, '1.16.201');
+  assert.ok(v.java.list.includes('1.16.5') && v.java.list.includes(v.java.max));
+  assert.ok(v.bedrock.list.includes('1.16.201') && v.bedrock.list.includes(v.bedrock.max));
+  assert.equal(checkVersion('java', '1.16.5'), null);
+  assert.equal(checkVersion('java', v.java.max), null);
+  assert.match(checkVersion('java', '1.12.2'), /слишком старая/);
+  assert.match(checkVersion('java', '99.1'), /новее/);
+  assert.equal(checkVersion('bedrock', '1.16.201'), null);
+  // база крафтов работает на самой старой и самой новой Java
+  assert.ok(new RecipeDB(md('1.16.5')).record('iron_pickaxe').recipes.length);
+  assert.ok(new RecipeDB(md(v.java.max)).record('iron_pickaxe').recipes.length);
+});
+
+test('Bedrock: старые версии — data-значения и старый /execute', async () => {
+  const { blockArg, execAt } = await import('../src/bedrock/blocks.js');
+  assert.equal(blockArg('oak_planks', '1.16.201'), 'planks');
+  assert.equal(blockArg('spruce_planks', '1.16.201'), 'planks 1');
+  assert.equal(blockArg('red_wool', '1.16.201'), 'wool 14');
+  assert.equal(blockArg('oak_door', '1.16.201', { upper_block_bit: true }, 8), 'wooden_door 8');
+  assert.equal(blockArg('spruce_planks', '1.20.0'), 'planks ["wood_type"="spruce"]');
+  assert.equal(blockArg('oak_planks', '1.26.60'), 'oak_planks');
+  assert.equal(blockArg('stone_bricks', '1.26.60'), 'stone_bricks');
+  assert.equal(execAt('1.16.201', 'Steve', 'tp @s ~ ~ ~'), 'execute "Steve" ~ ~ ~ tp @s ~ ~ ~');
+  assert.equal(execAt('1.26.60', 'Steve', 'tp @s ~ ~ ~'), 'execute at "Steve" run tp @s ~ ~ ~');
+});

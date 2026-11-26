@@ -3,6 +3,7 @@ import { pals } from './db.js';
 import { manager } from './agent/manager.js';
 import os from 'node:os';
 import { startServer } from './server/server.js';
+import { supportedVersions } from './versions.js';
 
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
@@ -23,6 +24,7 @@ console.log(`
   Панель:     http://${host === '0.0.0.0' ? 'localhost' : host}:${port}${lan.length ? `\n  С телефона: ${lan.join('  ')}` : ''}
   LLM:        ${s.llm.activeProvider} (${s.llm.providers[s.llm.activeProvider]?.model || '?'})
   Minecraft:  ${mcTarget}
+  Версии:     ${supportedVersions().text}
   Pals:       ${pals.list().map((p) => p.name).join(', ')}
 `);
 
