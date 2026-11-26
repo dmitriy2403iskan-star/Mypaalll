@@ -32,6 +32,15 @@ function defaults() {
       },
     },
     minecraft: {
+      edition: env('MC_EDITION', 'java'),   // java | bedrock
+      bedrock: {
+        host: env('BEDROCK_HOST', ''),       // пусто = как minecraft.host
+        port: Number(env('BEDROCK_PORT', '19132')),
+        auth: env('BEDROCK_AUTH', 'offline'), // offline (BDS с online-mode=false) | microsoft (LAN-мир с телефона, Realms, онлайн-серверы)
+        realm: env('BEDROCK_REALM', ''),     // имя Realm (тогда host/port не нужны)
+        version: env('BEDROCK_VERSION', ''), // пусто = автоопределение
+        transport: 'raknet',                 // raknet | nethernet (новые LAN-миры)
+      },
       host: env('MC_HOST', 'localhost'),
       port: Number(env('MC_PORT', '25565')),
       version: env('MC_VERSION') || false,
@@ -47,6 +56,7 @@ function defaults() {
     },
     limits: {
       enabled: true,
+      leaveOnExhausted: true,   // лимит закончился → pal пишет предупреждение и выходит из игры
       warnAtPercent: 10,        // предупреждать, когда осталось ≤ 10% лимита
       spamCount: 4,             // сколько раз написать в чат (3-5)
       spamIntervalSec: 1.5,     // пауза между повторами

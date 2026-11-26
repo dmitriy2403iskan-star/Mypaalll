@@ -1,6 +1,5 @@
 // Context Manager: решает, что из состояния мира реально нужно LLM прямо сейчас.
 // Полный снимок мира дорогой и шумный — отправляем только релевантное.
-import { snapshot } from '../minecraft/world.js';
 
 const INTENTS = {
   build: /стро|дом|хиж|стен|баш|build|house|hut|wall|tower|платформ/i,
@@ -15,7 +14,7 @@ export function detectIntents(text = '') {
 }
 
 export function buildContext(pal, message = '') {
-  const s = snapshot(pal.bot);
+  const s = pal.snapshot();
   if (!s) return 'Бот ещё не в мире.';
   const intents = detectIntents(message);
   const task = pal.tasks.summary();
@@ -23,6 +22,7 @@ export function buildContext(pal, message = '') {
 
   lines.push(`# Состояние (${new Date().toLocaleTimeString('ru-RU')})`);
   lines.push(`Позиция: ${s.position.x} ${s.position.y} ${s.position.z} | ${s.dimension}${s.biome ? `, биом ${s.biome}` : ''} | ${s.time}${s.isRaining ? ', дождь' : ''}`);
+  if (s.edition === 'bedrock') lines.push('Мир: Minecraft Bedrock. Ты действуешь командами (телепорт, /fill, /setblock, /give). Добывать блоки руками и крафтить в этом режиме ты не можешь — честно говори об этом.');
   lines.push(`Здоровье ${s.health}/20, сытость ${s.food}/20, в руке: ${s.heldItem || 'ничего'}, режим игры: ${s.gameMode}`);
   if (pal.mode) lines.push(`Фоновый режим: ${pal.mode.type} → ${pal.mode.player}`);
 
@@ -36,7 +36,7 @@ export function buildContext(pal, message = '') {
   const relevantMobs = mobs.filter((e) => e.type === 'hostile' || intents.includes('combat') || intents.includes('explore'));
   if (relevantMobs.length) lines.push(`Существа: ${relevantMobs.slice(0, 8).map((e) => `${e.name}${e.type === 'hostile' ? '(враг)' : ''} ${e.distance}бл`).join(', ')}`);
 
-  if (intents.some((i) => ['build', 'gather', 'craft', 'explore'].includes(i)) || !intents.length) {
+  if (s.nearbyBlocks.length && (intents.some((i) => ['build', 'gather', 'craft', 'explore'].includes(i)) || !intents.length)) {
     lines.push(`Блоки вокруг: ${s.nearbyBlocks.slice(0, intents.length ? 25 : 12).join(', ')}`);
   }
 

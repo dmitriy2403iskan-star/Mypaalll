@@ -68,11 +68,11 @@ export default [
   },
   {
     name: 'build_structure',
-    description: 'Простая форма: wall (стена), platform (пол), tower (полая башня), box (закрытая коробка), pillar (столб), pit (яма/котлован).',
+    description: 'Простая форма: wall (стена), platform (пол), tower (полая башня), box (закрытая коробка), pillar (столб), pit (яма/котлован), hut (маленький домик — то же, что build_house).',
     parameters: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['wall', 'platform', 'tower', 'box', 'pillar', 'pit'] },
+        type: { type: 'string', enum: ['wall', 'platform', 'tower', 'box', 'pillar', 'pit', 'hut'] },
         material: { type: 'string', description: 'Блок из инвентаря' },
         width: { type: 'number' }, length: { type: 'number' }, height: { type: 'number' },
         ...POS,
@@ -80,6 +80,10 @@ export default [
       required: ['type'],
     },
     async run(pal, args) {
+      if (args.type === 'hut') {
+        // старый тип «hut» из первой версии: маленький дом без подвала
+        return run(pal, house({ width: args.width ?? 5, length: args.length ?? 5, floor_height: (args.height ?? 3) + 1, roof: 'flat', windows: false, wall_material: args.material, ...args }), args, 'Домик');
+      }
       if (args.type !== 'pit' && !args.material) throw new ActionError('Укажи material');
       return run(pal, simple(args.type, args), args, 'Постройка');
     },

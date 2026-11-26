@@ -40,9 +40,10 @@ export default [
     },
     async run(pal, { item, count = 1 }) {
       const bot = pal.bot;
-      return pal.recipes().describePlan(String(item).replace(/^minecraft:/, ''), count, inventory(bot), {
-        hasTable: findBlocks(bot, 'crafting_table', 24, 1).length > 0,
-        hasFurnace: findBlocks(bot, 'furnace', 24, 1).length > 0,
+      const java = pal.edition !== 'bedrock';
+      return pal.recipes().describePlan(String(item).replace(/^minecraft:/, ''), count, java ? inventory(bot) : {}, {
+        hasTable: java && findBlocks(bot, 'crafting_table', 24, 1).length > 0,
+        hasFurnace: java && findBlocks(bot, 'furnace', 24, 1).length > 0,
       });
     },
   },

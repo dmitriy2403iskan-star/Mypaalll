@@ -1,0 +1,7 @@
+{
+  "name": "raknet-native",
+  "version": "1.0.3",
+  "description": "Заглушка: нативный RakNet не собирается на телефонах (Termux) и без компилятора. bedrock-protocol автоматически переключается на чистый JS-бэкенд jsp-raknet.",
+  "main": "index.js",
+  "license": "MIT"
+}

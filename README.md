@@ -1,5 +1,7 @@
 # MyPal: ИИ-компаньон для Minecraft на своих API-ключах
 
+**Java и Bedrock. ПК, Android (Termux) и iPhone (панель по Wi-Fi)** — см. [docs/PHONE_AND_BEDROCK.md](docs/PHONE_AND_BEDROCK.md).
+
 Аналог MinePal. Бот заходит на сервер как обычный игрок: ходит за тобой, добывает, крафтит, строит, сражается, запоминает места и факты и отвечает в чате. Нейросеть ты выбираешь сам и меняешь ключи прямо в веб-панели, без перезапуска.
 
 ```
@@ -112,6 +114,8 @@ npm start
 * ошибкам «квота/баланс исчерпаны»;
 * своему дневному лимиту токенов или запросов, его можно задать для любого провайдера.
 
+После предупреждения о том, что лимит закончился, pal **выходит из игры**. Это настройка `limits.leaveOnExhausted`, по умолчанию включена. Когда сменишь ключ или лимит обновится, подключи pal'а снова кнопкой.
+
 Порог, число повторов, паузу и тексты сообщений можно поменять в «Настройках → Лимиты». Там же есть кнопка проверки. Расход за день виден на дашборде.
 
 **Голос.** Кнопка 🎤 в чате и галочка «Озвучивать ответы» работают через Web Speech API браузера, ключи не нужны. Лучше всего — в Chrome или Edge.
@@ -126,6 +130,7 @@ src/
   llm/                router.js + адаптеры openai.js / anthropic.js / gemini.js, usage.js (лимиты и расход)
   agent/              pal.js (мозговой цикл), manager.js, memory.js, tasks.js, context.js, prompts.js
   minecraft/          bot.js (Mineflayer + плагины), world.js (восприятие)
+  bedrock/            body.js (подключение к Bedrock), actions.js (действия командами), protocol.js
   building/           blueprints.js (генераторы домов и чертежей), executor.js (стройка с проверкой)
   knowledge/          recipes.js (база крафтов под версию сервера)
   actions/            movement, gathering, crafting, building, interaction, agentic
@@ -145,7 +150,7 @@ test/                 npm test
 
 ## Переменные окружения
 
-`PORT` (3000), `HOST` (127.0.0.1; не открывай панель в интернет, через неё видны настройки), `DATA_DIR` (`data`), `AUTOCONNECT=Alex,Zoe` (подключить при старте), `DEBUG=1` (лог в консоль), а также ключи и параметры из `.env.example`.
+`PORT` (3000), `HOST` (127.0.0.1; `0.0.0.0` — доступ с телефона по Wi-Fi), `PANEL_PASSWORD` (обязателен при `HOST=0.0.0.0`), `MC_EDITION` (`java`/`bedrock`), `BEDROCK_HOST`/`BEDROCK_PORT`/`BEDROCK_AUTH`/`BEDROCK_REALM`, `DATA_DIR` (`data`), `AUTOCONNECT=Alex,Zoe` (подключить при старте), `DEBUG=1` (лог в консоль), а также ключи и параметры из `.env.example`.
 
 ## Ограничения и что дальше
 

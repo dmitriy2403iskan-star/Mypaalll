@@ -76,3 +76,16 @@ code { background: var(--panel2); padding: 1px 4px; border-radius: 4px; }
 .banner button { background: transparent; color: inherit; border: 1px solid currentColor; padding: 2px 8px; }
 .t-limit { color: var(--warn); font-weight: 700; }
 .card > label input { width: 100%; }
+.t-auth { color: var(--accent2); font-weight: 700; }
+.banner a { color: inherit; }
+[hidden] { display: none !important; }
+@media (max-width: 600px) {
+  header { gap: 8px; padding: 8px 12px; flex-wrap: nowrap; }
+  .brand { font-size: 16px; white-space: nowrap; }
+  nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; min-width: 0; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { white-space: nowrap; padding: 6px 8px; }
+  #conn { font-size: 0; padding: 4px; } /* на телефоне — только точка статуса */
+  #conn::first-letter { font-size: 12px; }
+  main { padding: 12px; }
+}

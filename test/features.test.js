@@ -131,3 +131,21 @@ test('Лимиты: свой дневной бюджет блокирует за
   await assert.rejects(chat({ provider: 'gemini', messages: [] }), LimitExhaustedError);
   settings.update({ limits: { dailyTokenBudget: 0 } });
 });
+
+test('Bedrock: чертёж → команды /fill и /setblock', async () => {
+  const { opsToCommands } = await import('../src/bedrock/actions.js');
+  const { BEDROCK_ACTIONS, ACTIONS } = await import('../src/actions/index.js');
+  const cmds = opsToCommands({ x: 10, y: 64, z: 20 }, house({ width: 5, length: 5, basement: true, basement_depth: 2, roof: 'flat' }).ops);
+  assert.ok(cmds.some((c) => /^fill \S+ \S+ \S+ \S+ \S+ \S+ air$/.test(c)), 'подвал копается через /fill … air');
+  assert.ok(cmds.some((c) => c.startsWith('fill ') && c.endsWith(' oak_planks')), 'ряды блоков сжаты в /fill');
+  assert.ok(cmds.some((c) => c.includes('wooden_door ["upper_block_bit"=true]')), 'дверь — две половины, Bedrock-id');
+  assert.ok(cmds.some((c) => c.includes('ladder ["facing_direction"=5]')), 'лестница повернута от стены');
+  assert.ok(cmds.length < house({ width: 5, length: 5, basement: true, basement_depth: 2, roof: 'flat' }).ops.length / 2, 'команд заметно меньше, чем блоков');
+  // копание идёт раньше установки
+  assert.ok(cmds.findIndex((c) => c.endsWith(' air')) < cmds.findIndex((c) => c.endsWith(' oak_planks')));
+  const names = BEDROCK_ACTIONS.map((a) => a.name);
+  for (const n of ['follow_player', 'build_house', 'run_command', 'plan_crafting', 'remember']) assert.ok(names.includes(n), n);
+  assert.ok(!names.includes('collect_blocks'), 'в Bedrock нет ручной добычи');
+  assert.equal(new Set(names).size, names.length, 'без дубликатов');
+  assert.ok(ACTIONS.find((a) => a.name === 'build_structure').parameters.properties.type.enum.includes('hut'), 'старый тип hut сохранён');
+});

@@ -55,14 +55,14 @@ function renderCards() {
     return `<div class="card">
       <div class="row" style="justify-content:space-between;margin-top:0">
         <h3 style="margin:0">${esc(p.name)}</h3>
-        <span class="pill status-${st.status}">● ${st.status}${st.busy ? ' · думает' : ''}</span>
+        <span class="pill status-${st.status}">● ${st.status}${st.busy ? ' · думает' : ''}${st.edition === 'bedrock' ? ' · Bedrock' : ''}${st.leftDueToLimit && st.status === 'offline' ? ' · вышел: лимит' : ''}</span>
       </div>
       <div class="hint">${esc((p.personality || '').slice(0, 90))}</div>
       ${w ? `
         <div class="kv" style="margin-top:8px">
           <span>Здоровье</span><span><div class="bar hp"><div style="width:${w.health * 5}%"></div></div></span>
           <span>Еда</span><span><div class="bar food"><div style="width:${w.food * 5}%"></div></div></span>
-          <span>Позиция</span><span>${w.position.x} ${w.position.y} ${w.position.z} · ${esc(w.dimension)}</span>
+          <span>Позиция</span><span>${w.position ? `${w.position.x} ${w.position.y} ${w.position.z}` : '?'} · ${esc(w.dimension)}</span>
           <span>Время</span><span>${esc(w.time)}</span>
           <span>Режим</span><span>${st.mode ? `${esc(st.mode.type)} → ${esc(st.mode.player)}` : '—'}</span>
           <span>Действие</span><span>${esc(st.currentAction || '—')}</span>
@@ -138,6 +138,13 @@ function addLog(e) {
   box.appendChild(div);
   while (box.children.length > 400) box.firstChild.remove();
   box.scrollTop = box.scrollHeight;
+  if (e.type === 'auth' && e.auth) {
+    const b = $('#limitBanner');
+    b.hidden = false;
+    b.className = 'banner';
+    b.innerHTML = `<span>🔑 Вход Microsoft для ${esc(e.pal)}: открой <a href="${esc(e.auth.verification_uri)}" target="_blank" rel="noopener">${esc(e.auth.verification_uri)}</a> и введи код <b>${esc(e.auth.user_code)}</b></span><button type="button">✕</button>`;
+    $('button', b).onclick = () => { b.hidden = true; };
+  }
   if (e.palId === selectedPal()) {
     if (e.type === 'say') { addMsg('pal', e.pal, e.text); speak(e.text); }
     if (e.type === 'action' || e.type === 'action_error' || e.type === 'reflex') addMsg('meta', '', `${e.type === 'reflex' ? '⚡' : '⚙'} ${e.text}`);
@@ -276,6 +283,7 @@ async function loadSettings() {
     const v = getPath(s, el.name);
     if (el.type === 'checkbox') el.checked = Boolean(v); else el.value = v === false || v === undefined || v === null ? '' : v;
   }
+  toggleEdition();
   // селекты pal-формы тоже обновим
   if (state.editingPal !== undefined) $('#palForm').provider.value = state.pals.find((p) => p.id === state.editingPal)?.provider || '';
 }
@@ -319,6 +327,12 @@ async function saveSettings(reload = true) {
   if (reload) loadSettings();
 }
 $('#settingsForm').addEventListener('submit', (e) => { e.preventDefault(); saveSettings().catch(toast); });
+
+function toggleEdition() {
+  const ed = $('[name="minecraft.edition"]').value;
+  $$('[data-edition]').forEach((el) => { el.hidden = el.dataset.edition !== ed; });
+}
+$('[name="minecraft.edition"]').addEventListener('change', toggleEdition);
 
 // ------------------------------------------------------------- лимиты
 async function loadUsage() {

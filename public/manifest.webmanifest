@@ -1,0 +1,9 @@
+{
+  "name": "MyPal — ИИ-компаньон для Minecraft",
+  "short_name": "MyPal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#12151a",
+  "theme_color": "#1b2027",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

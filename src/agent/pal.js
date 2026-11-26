@@ -14,6 +14,9 @@ import { systemPrompt } from './prompts.js';
 import { goals, findPlayer } from '../actions/util.js';
 import { RecipeDB } from '../knowledge/recipes.js';
 import { LimitExhaustedError } from '../llm/usage.js';
+import { BedrockBody } from '../bedrock/body.js';
+import { startBedrockModes } from '../bedrock/actions.js';
+import minecraftData from 'minecraft-data';
 
 const STOP_WORDS = /^(стоп|stop|хватит|остановись|замри|halt)[!. ]*$/i;
 const MAX_AUTO_CONTINUE = 6;
@@ -39,11 +42,21 @@ export class Pal extends EventEmitter {
 
   settings() { return settings.get(); }
 
+  /** Java или Bedrock — берётся из настроек при подключении. */
+  get edition() { return this.bot?.edition === 'bedrock' ? 'bedrock' : (this.bot ? 'java' : settings.get().minecraft.edition || 'java'); }
+
   /** База крафтов под версию текущего сервера (создаётся лениво). */
   recipes() {
     if (!this.bot) throw new Error('Бот не подключён');
-    if (!this._recipes || this._recipes.reg !== this.bot.registry) this._recipes = new RecipeDB(this.bot.registry);
+    // в Bedrock рецепты почти совпадают с Java — берём данные последней Java-версии как справочник
+    const reg = this.bot.registry || (this._bedrockReg ||= minecraftData(minecraftData.supportedVersions.pc.at(-1)));
+    if (!this._recipes || this._recipes.reg !== reg) this._recipes = new RecipeDB(reg);
     return this._recipes;
+  }
+
+  snapshot() {
+    if (!this.bot?.entity) return null;
+    return this.edition === 'bedrock' ? this.bot.snapshot() : snapshot(this.bot);
   }
   owner() { return this.profile.owner; }
   reloadProfile() { this.profile = palsDb.get(this.id); }
@@ -58,28 +71,46 @@ export class Pal extends EventEmitter {
   connect() {
     if (this.bot) return;
     const mc = settings.get().minecraft;
+    const bedrock = mc.edition === 'bedrock';
     this.status = 'connecting';
+    this.leftDueToLimit = false;
     this.emit('status');
-    this.log('system', `Подключаюсь к ${mc.host}:${mc.port}...`);
-    const bot = createBot({ username: this.profile.name, ...mc });
+    let bot;
+    if (bedrock) {
+      const b = mc.bedrock || {};
+      this.log('system', b.realm ? `Подключаюсь к Realm «${b.realm}» (Bedrock)...` : `Подключаюсь к Bedrock ${b.host || mc.host}:${b.port || 19132}...`);
+      bot = new BedrockBody({ username: this.profile.name, host: b.host || mc.host, port: b.port || 19132, auth: b.auth || 'offline', version: b.version || undefined, realm: b.realm || undefined, transport: b.transport });
+      // вход Microsoft: показываем код в панели
+      bot.on('msaCode', (d) => this.log('auth', `Вход в Microsoft для бота: открой ${d.verification_uri} и введи код ${d.user_code}`, { auth: d }));
+    } else {
+      this.log('system', `Подключаюсь к ${mc.host}:${mc.port}...`);
+      bot = createBot({ username: this.profile.name, ...mc });
+    }
     this.bot = bot;
 
     bot.once('spawn', () => {
       this.status = 'online';
-      this.reflex = new ReflexEngine(this);
-      this.log('system', `В мире! Версия ${bot.version}`);
+      if (bedrock) {
+        this.stopModes = startBedrockModes(this);
+        this.log('system', `В мире Bedrock! Версия ${bot.version || '?'}. Для действий нужны читы и права оператора.`);
+      } else {
+        this.reflex = new ReflexEngine(this);
+        this.log('system', `В мире! Версия ${bot.version}`);
+      }
       this.emit('status');
       if (this.profile.owner) setTimeout(() => this.say(`Привет, ${this.profile.owner}! Я тут.`), 1500);
     });
     bot.on('chat', (username, message) => this.onChat(username, message, false));
     bot.on('whisper', (username, message) => this.onChat(username, message, true));
-    bot.on('death', () => { this.log('system', 'Я погиб...'); this.memory.add('episodic', `Погиб в ${JSON.stringify(snapshot(bot)?.position)}`, 2); this.stopAll(); });
+    bot.on('death', () => { this.log('system', 'Я погиб...'); this.memory.add('episodic', `Погиб в ${JSON.stringify(this.snapshot()?.position)}`, 2); this.stopAll(); });
     bot.on('kicked', (reason) => this.log('error', `Кикнули: ${typeof reason === 'string' ? reason : JSON.stringify(reason)}`));
     bot.on('error', (err) => this.log('error', `Ошибка соединения: ${err.message}`));
     bot.on('end', (reason) => {
       this.log('system', `Отключён (${reason})`);
       this.reflex?.destroy();
       this.reflex = null;
+      this.stopModes?.();
+      this.stopModes = null;
       this.bot = null;
       this.status = 'offline';
       this.busy = false;
@@ -94,10 +125,10 @@ export class Pal extends EventEmitter {
   }
 
   // ------------------------------------------------------------------ управление действиями
-  setMode(type, player) { this.mode = { type, player }; this.emit('status'); }
+  setMode(type, player, extra = {}) { this.mode = { type, player, ...extra }; this.emit('status'); }
 
   resumeMode() {
-    if (!this.bot || !this.mode) return;
+    if (!this.bot || !this.mode || this.edition === 'bedrock') return;
     const target = findPlayer(this.bot, this.mode.player);
     if (target) this.bot.pathfinder.setGoal(new goals.GoalFollow(target, 3), true);
   }
@@ -105,13 +136,14 @@ export class Pal extends EventEmitter {
   /** Перед новым «двигательным» действием выключаем фоновые режимы, чтобы они не тянули бота. */
   prepareForAction() {
     if (this.mode) { this.mode = null; this.emit('status'); }
-    this.bot?.pathfinder.setGoal(null);
+    this.bot?.pathfinder?.setGoal(null);
   }
 
   stopAll() {
     this.interrupted = true;
     this.mode = null;
     if (!this.bot) return;
+    if (this.edition === 'bedrock') { this.emit('status'); return; }
     try { this.bot.pathfinder.stop(); this.bot.pathfinder.setGoal(null); } catch { /* */ }
     try { this.bot.pvp.stop(); } catch { /* */ }
     try { this.bot.collectBlock.cancelTask(); } catch { /* */ }
@@ -142,8 +174,18 @@ export class Pal extends EventEmitter {
     }
     if (level === 'exhausted') {
       // без нейросети продолжать план бессмысленно
-      this.queue = this.queue.filter((m) => m.from !== 'система');
+      this.queue = [];
       this.autoContinue = MAX_AUTO_CONTINUE;
+      // лимит закончился → после предупреждений pal выходит из игры (настройка limits.leaveOnExhausted)
+      if (cfg.leaveOnExhausted !== false && !this.leftDueToLimit) {
+        this.leftDueToLimit = true;
+        const after = n * (Number(cfg.spamIntervalSec) || 1.5) * 1000 + 1500;
+        setTimeout(() => {
+          if (!this.bot) return;
+          this.log('system', `Выхожу из игры: лимит ${provider} закончился (${reason}). Подключи снова, когда сменишь ключ или лимит обновится.`);
+          this.disconnect();
+        }, after);
+      }
     }
   }
 
@@ -190,7 +232,7 @@ export class Pal extends EventEmitter {
     }
     this.autoContinue = 0;
     // новое сообщение прерывает текущую цепочку — LLM увидит активный план и решит, продолжать ли
-    if (this.busy) { this.interrupted = true; try { this.bot?.pathfinder.stop(); this.bot?.collectBlock.cancelTask(); } catch { /* */ } }
+    if (this.busy) { this.interrupted = true; try { this.bot?.pathfinder?.stop(); this.bot?.collectBlock?.cancelTask(); } catch { /* */ } }
     this.queue.push({ from, text });
     this.pump();
   }
@@ -232,7 +274,7 @@ export class Pal extends EventEmitter {
 
     const userContent = `${buildContext(this, text)}\n\n---\n[${from}]: ${text}`;
     const messages = [...history, { role: 'user', content: userContent }];
-    const tools = toolSchemas();
+    const tools = toolSchemas(this);
     const system = systemPrompt(this);
     const actionLog = [];
     let spoken = [];
@@ -287,7 +329,9 @@ export class Pal extends EventEmitter {
       busy: this.busy,
       mode: this.mode,
       currentAction: this.currentAction,
-      world: this.bot?.entity ? snapshot(this.bot) : null,
+      edition: this.edition,
+      leftDueToLimit: Boolean(this.leftDueToLimit),
+      world: this.snapshot(),
       task: this.tasks.current(),
     };
   }
