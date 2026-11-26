@@ -8,6 +8,7 @@ import { pals as palsDb } from '../db.js';
 import { manager } from '../agent/manager.js';
 import { testProvider } from '../llm/router.js';
 import { ACTIONS, runAction } from '../actions/index.js';
+import { usage } from '../llm/usage.js';
 
 export function startServer({ port = 3000, host = '127.0.0.1' } = {}) {
   const app = express();
@@ -70,6 +71,17 @@ export function startServer({ port = 3000, host = '127.0.0.1' } = {}) {
   app.get('/api/pals/:id/tasks', wrap((req) => palOf(req).tasks.list()));
   app.post('/api/pals/:id/tasks/:tid/status', wrap((req) => palOf(req).tasks.setStatus(Number(req.params.tid), req.body.status)));
 
+  // ---------- лимиты и расход ----------
+  app.get('/api/usage', wrap(() => usage.summary()));
+  // проверить, как выглядит предупреждение в игре (ничего не тратит)
+  app.post('/api/usage/test-alert', wrap((req) => {
+    const provider = req.body.provider || settings.get().llm.activeProvider;
+    const level = req.body.level === 'exhausted' ? 'exhausted' : 'warning';
+    delete usage.alerted[provider];
+    usage.alert(provider, level, { percent: level === 'warning' ? 7 : 0, reason: 'тестовое предупреждение' });
+    return { ok: true };
+  }));
+
   app.get('/api/actions', wrap(() => ACTIONS.map(({ name, description, parameters }) => ({ name, description, parameters }))));
 
   const server = http.createServer(app);
@@ -78,7 +90,7 @@ export function startServer({ port = 3000, host = '127.0.0.1' } = {}) {
     const msg = JSON.stringify({ type, data });
     for (const c of wss.clients) if (c.readyState === 1) c.send(msg);
   };
-  for (const ev of ['log', 'chat', 'status', 'tasks']) manager.on(ev, (d) => broadcast(ev, d));
+  for (const ev of ['log', 'chat', 'status', 'tasks', 'limit']) manager.on(ev, (d) => broadcast(ev, d));
   wss.on('connection', (ws) => ws.send(JSON.stringify({ type: 'states', data: manager.states() })));
   // периодически шлём состояние онлайн-pal'ов (здоровье, позиция, инвентарь)
   setInterval(() => {

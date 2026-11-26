@@ -26,6 +26,7 @@ export function createBot({ username, host, port, version, auth }) {
     moves.allowParkour = true;
     moves.allowSprinting = true;
     moves.canDig = true;
+    if ('canOpenDoors' in moves) moves.canOpenDoors = true; // чтобы не запереть себя в построенном доме
     // не ломать блоки, которые ломать не стоит
     for (const name of ['chest', 'crafting_table', 'furnace', 'bed', 'white_bed', 'red_bed', 'oak_door']) {
       const b = bot.registry.blocksByName[name];

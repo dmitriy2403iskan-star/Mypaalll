@@ -71,3 +71,8 @@ label.check { flex-direction: row; align-items: center; color: var(--text); font
 .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 8px 0; }
 .form label { margin-bottom: 8px; }
 code { background: var(--panel2); padding: 1px 4px; border-radius: 4px; }
+.banner { background: var(--warn); color: #1b1300; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.banner.exhausted { background: var(--danger); color: #fff; }
+.banner button { background: transparent; color: inherit; border: 1px solid currentColor; padding: 2px 8px; }
+.t-limit { color: var(--warn); font-weight: 700; }
+.card > label input { width: 100%; }

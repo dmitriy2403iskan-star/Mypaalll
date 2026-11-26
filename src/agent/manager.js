@@ -2,11 +2,21 @@
 import { EventEmitter } from 'node:events';
 import { pals as palsDb } from '../db.js';
 import { Pal } from './pal.js';
+import { usage } from '../llm/usage.js';
 
 class PalManager extends EventEmitter {
   constructor() {
     super();
     this.running = new Map();
+    // Лимиты LLM на исходе / закончились → каждый онлайн-pal, который пользуется этим провайдером, спамит в чат
+    for (const level of ['warning', 'exhausted']) {
+      usage.on(level, (info) => {
+        this.emit('limit', { level, ...info, time: Date.now() });
+        for (const pal of this.running.values()) {
+          if (pal.status === 'online' && pal.usesProvider(info.provider)) pal.announceLimit(level, info);
+        }
+      });
+    }
   }
 
   get(id) {

@@ -50,9 +50,11 @@ export async function gotoPos(pal, pos, range = 2, timeoutMs) {
 const isAir = (b) => !b || b.name === 'air' || b.name === 'cave_air' || b.boundingBox === 'empty';
 
 /** Найти блок рядом с позицией, к грани которого можно прикрепить новый блок. */
-export function referenceFor(bot, pos) {
+export function referenceFor(bot, pos, attach) {
   const dirs = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
-  for (const [dx, dy, dz] of dirs) {
+  // attach — к какому соседу обязательно крепить (лестница к стене, дверь к полу)
+  const order = attach ? [attach] : dirs;
+  for (const [dx, dy, dz] of order) {
     const ref = bot.blockAt(pos.offset(dx, dy, dz));
     if (ref && ref.boundingBox === 'block' && !ref.name.includes('water') && !ref.name.includes('lava')) {
       return { ref, face: new Vec3(-dx, -dy, -dz) };
@@ -62,14 +64,14 @@ export function referenceFor(bot, pos) {
 }
 
 /** Поставить блок из инвентаря в конкретную точку. */
-export async function placeAt(pal, itemName, pos) {
+export async function placeAt(pal, itemName, pos, { attach } = {}) {
   const { bot } = pal;
   const target = bot.blockAt(pos);
   if (target && !isAir(target) && !['water', 'lava', 'short_grass', 'grass', 'tall_grass', 'snow'].includes(target.name)) return false; // уже занято
   const item = bot.inventory.items().find((i) => i.name === itemName);
   if (!item) throw new ActionError(`Нет ${itemName} в инвентаре`);
-  const r = referenceFor(bot, pos);
-  if (!r) throw new ActionError(`Не к чему прикрепить блок в ${pos}`);
+  const r = referenceFor(bot, pos, attach);
+  if (!r) throw new ActionError(`Не к чему прикрепить ${itemName} в ${pos}`);
   if (bot.entity.position.distanceTo(pos.offset(0.5, 0.5, 0.5)) > 4.2) await gotoPos(pal, pos, 3);
   // не стоять в месте установки
   const feet = bot.entity.position.floored();

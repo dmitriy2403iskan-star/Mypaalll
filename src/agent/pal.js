@@ -12,6 +12,8 @@ import { TaskManager } from './tasks.js';
 import { buildContext } from './context.js';
 import { systemPrompt } from './prompts.js';
 import { goals, findPlayer } from '../actions/util.js';
+import { RecipeDB } from '../knowledge/recipes.js';
+import { LimitExhaustedError } from '../llm/usage.js';
 
 const STOP_WORDS = /^(стоп|stop|хватит|остановись|замри|halt)[!. ]*$/i;
 const MAX_AUTO_CONTINUE = 6;
@@ -36,6 +38,13 @@ export class Pal extends EventEmitter {
   }
 
   settings() { return settings.get(); }
+
+  /** База крафтов под версию текущего сервера (создаётся лениво). */
+  recipes() {
+    if (!this.bot) throw new Error('Бот не подключён');
+    if (!this._recipes || this._recipes.reg !== this.bot.registry) this._recipes = new RecipeDB(this.bot.registry);
+    return this._recipes;
+  }
   owner() { return this.profile.owner; }
   reloadProfile() { this.profile = palsDb.get(this.id); }
 
@@ -111,6 +120,33 @@ export class Pal extends EventEmitter {
     this.emit('status');
   }
 
+  // ------------------------------------------------------------------ лимиты LLM
+  usesProvider(id) {
+    const llm = settings.get().llm;
+    const main = this.profile.provider || llm.activeProvider;
+    return id === main || id === (llm.memoryProvider || main);
+  }
+
+  /** Спамим предупреждение в чат N раз (по умолчанию 4), чтобы его точно заметили. */
+  announceLimit(level, { provider, percent, reason }) {
+    const cfg = settings.get().limits;
+    const tpl = level === 'exhausted' ? cfg.exhaustedMessage : cfg.warnMessage;
+    const text = tpl.replace('{percent}', percent).replace('{reason}', reason).replace('{provider}', provider);
+    const n = Math.max(1, Math.min(10, Number(cfg.spamCount) || 4));
+    this.log(level === 'exhausted' ? 'error' : 'limit', `${text} (×${n})`);
+    for (let i = 0; i < n; i++) {
+      setTimeout(() => {
+        if (!this.bot) return;
+        for (let j = 0; j < text.length; j += 240) this.bot.chat(text.slice(j, j + 240));
+      }, i * (Number(cfg.spamIntervalSec) || 1.5) * 1000);
+    }
+    if (level === 'exhausted') {
+      // без нейросети продолжать план бессмысленно
+      this.queue = this.queue.filter((m) => m.from !== 'система');
+      this.autoContinue = MAX_AUTO_CONTINUE;
+    }
+  }
+
   // ------------------------------------------------------------------ чат
   say(text) {
     if (!text) return;
@@ -169,7 +205,8 @@ export class Pal extends EventEmitter {
       await this.think(next.from, next.text);
     } catch (e) {
       this.log('error', `Мозг: ${e.message}`);
-      this.say('Хм, у меня что-то с головой (ошибка LLM). Проверь настройки ключей.');
+      // о закончившемся лимите уже предупредили спамом в чат — не дублируем
+      if (!(e instanceof LimitExhaustedError)) this.say('Хм, у меня что-то с головой (ошибка LLM). Проверь настройки ключей.');
     } finally {
       this.busy = false;
       this.currentAction = null;

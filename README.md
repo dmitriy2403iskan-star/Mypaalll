@@ -61,8 +61,8 @@ npm start
 |---|---|
 | Движение | `go_to_player`, `follow_player`, `go_to_coords`, `go_to_location`, `save_location`, `explore`, `stop` |
 | Добыча | `collect_blocks` (проверяет, есть ли нужный инструмент), `pickup_items`, `break_block` |
-| Крафт | `craft_item` (сам ставит или крафтит верстак), `smelt_item` (печь), `get_recipe` |
-| Стройка | `build_structure` (hut/box/wall/tower/platform, считает материал, ищет уровень земли), `place_block` |
+| Крафт | `craft_item` (сам ставит или крафтит верстак), `smelt_item` (печь), `get_recipe`, `plan_crafting`, `list_variants` |
+| Стройка | `build_house` (дом по параметрам), `build_custom` (свой чертёж от ИИ), `build_structure` (wall/platform/tower/box/pillar/pit), `place_block`, `break_block` |
 | Бой | `attack`, `guard` (фоновая охрана игрока) |
 | Инвентарь | `give_items`, `drop_items`, `equip`, `eat`, `store_in_chest`, `take_from_chest`, `sleep_in_bed` |
 | Мышление | `inspect_surroundings`, `find_block`, `create_plan`, `update_plan_step`, `finish_plan`, `remember`, `wait` |
@@ -78,6 +78,42 @@ npm start
 
 Плюс именованные места. Значимые факты автоматически извлекаются из разговора каждые 6 реплик. Воспоминания можно смотреть, добавлять и удалять в панели.
 
+**Постройки по описанию.** ИИ переводит просьбу в параметры `build_house`:
+
+| Просьба | Параметр |
+|---|---|
+| «с подвалом» / «без подвала» | `basement` (по умолчанию без подвала), `basement_depth`, `basement_lined` |
+| «двухэтажный» | `floors` (1–4), `floor_height` |
+| «с двускатной крышей» / «с плоской» | `roof`: `gable` / `flat` / `none` |
+| «из камня», «с бревенчатыми углами» | `wall_material`, `floor_material`, `roof_material`, `corner_material` |
+| «без окон», «со стеклом» | `windows`, `window_material` |
+| дверь и факелы | `door`, `door_material`, `torches` |
+| размер | `width`, `length` |
+
+Лестницы (`ladder`) в подвал и между этажами ставятся автоматически через люки. Порядок работы:
+1. Сначала `dry_run=true`: бот выдаёт ведомость материалов и говорит, чего не хватает.
+2. Бот собирает недостающее.
+3. Стройка: сначала копает (подвал, расчистка), потом ставит блоки снизу вверх.
+4. Перепроверка по чертежу: бот убирает блоки-подпорки и доставляет пропущенное.
+
+Если постройка необычная (мост, башня с зубцами, ферма), ИИ рисует свой чертёж по слоям через `build_custom`.
+
+**База крафтов** — см. [docs/RECIPES.md](docs/RECIPES.md).
+* Каждая вариация хранится отдельной записью, с точной раскладкой по клеткам, сеткой 2×2 или 3×3 и станцией.
+* Предметы проверяются по версии сервера.
+* Есть таблицы плавки и рецепты незеритовых улучшений на столе кузнеца.
+* Свои рецепты кладутся в `data/recipes/*.json`.
+* `plan_crafting` строит всю цепочку крафта с учётом инвентаря.
+* `npm run export-recipes -- 1.21.4` выгружает полную базу.
+
+**Лимиты.** Когда лимит LLM на исходе, pal пишет в игровой чат `⚠ LIMITS ALMOST RAN OUT!` 4 раза подряд (число настраивается). Когда лимит закончился, пишет `⛔ LIMITS RAN OUT!`. Остаток определяется по:
+* заголовкам провайдера (`x-ratelimit-*`, `anthropic-ratelimit-*`);
+* балансу OpenRouter;
+* ошибкам «квота/баланс исчерпаны»;
+* своему дневному лимиту токенов или запросов, его можно задать для любого провайдера.
+
+Порог, число повторов, паузу и тексты сообщений можно поменять в «Настройках → Лимиты». Там же есть кнопка проверки. Расход за день виден на дашборде.
+
 **Голос.** Кнопка 🎤 в чате и галочка «Озвучивать ответы» работают через Web Speech API браузера, ключи не нужны. Лучше всего — в Chrome или Edge.
 
 ## Структура
@@ -87,9 +123,11 @@ src/
   index.js            точка входа
   config.js           настройки и ключи (data/settings.json > .env > дефолты)
   db.js               SQLite: pals, memories, conversations, locations, tasks
-  llm/                router.js + адаптеры openai.js / anthropic.js / gemini.js
+  llm/                router.js + адаптеры openai.js / anthropic.js / gemini.js, usage.js (лимиты и расход)
   agent/              pal.js (мозговой цикл), manager.js, memory.js, tasks.js, context.js, prompts.js
   minecraft/          bot.js (Mineflayer + плагины), world.js (восприятие)
+  building/           blueprints.js (генераторы домов и чертежей), executor.js (стройка с проверкой)
+  knowledge/          recipes.js (база крафтов под версию сервера)
   actions/            movement, gathering, crafting, building, interaction, agentic
   reflex/reflex.js    быстрые рефлексы
   server/server.js    REST + WebSocket
@@ -111,6 +149,7 @@ test/                 npm test
 
 ## Ограничения и что дальше
 
-* Стройка пока работает по простым параметрическим чертежам; сложные постройки (крыши-скаты, .schem-файлы) ещё не поддерживаются.
+* Крыши — ступенчатые из полных блоков; ступеньки-stairs с ориентацией и импорт `.schem` пока не поддерживаются.
+* Незеритовое улучшение на столе кузнеца бот знает, но пока не выполняет сам.
 * Голос работает через браузер. Серверные STT/TTS (Whisper, ElevenLabs) можно добавить отдельным провайдером.
 * Electron-обёртку можно добавить поверх: backend уже отделён от UI.

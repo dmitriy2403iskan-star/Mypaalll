@@ -51,7 +51,7 @@ export class OpenAICompatibleProvider {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(120_000),
     });
-    if (!res.ok) throw new Error(`${this.cfg.id}: HTTP ${res.status} ${(await res.text()).slice(0, 500)}`);
+    if (!res.ok) throw httpError(this.cfg.id, res.status, await res.text(), res.headers);
     const data = await res.json();
     const msg = data.choices?.[0]?.message || {};
     const toolCalls = (msg.tool_calls || []).map((c) => {
@@ -59,6 +59,19 @@ export class OpenAICompatibleProvider {
       try { args = c.function.arguments ? JSON.parse(c.function.arguments) : {}; } catch { args = { _invalid: c.function.arguments }; }
       return { id: c.id || `call_${Math.random().toString(36).slice(2)}`, name: c.function.name, args };
     });
-    return { text: msg.content || '', toolCalls, usage: data.usage };
+    return {
+      text: msg.content || '',
+      toolCalls,
+      usage: { inputTokens: data.usage?.prompt_tokens || 0, outputTokens: data.usage?.completion_tokens || 0 },
+      headers: res.headers,
+    };
   }
+}
+
+export function httpError(id, status, body, headers) {
+  const e = new Error(`${id}: HTTP ${status} ${String(body).slice(0, 500)}`);
+  e.status = status;
+  e.body = body;
+  e.headers = headers;
+  return e;
 }

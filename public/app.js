@@ -320,6 +320,35 @@ async function saveSettings(reload = true) {
 }
 $('#settingsForm').addEventListener('submit', (e) => { e.preventDefault(); saveSettings().catch(toast); });
 
+// ------------------------------------------------------------- лимиты
+async function loadUsage() {
+  try {
+    const list = await api('/api/usage');
+    if (!list.length) return;
+    $('#usageBox').innerHTML = list.map((u) => {
+      const r = u.remaining;
+      const pct = r ? Math.round(r.percent) : null;
+      return `<div class="item"><div style="flex:1"><b>${esc(u.provider)}</b> · запросов ${u.today.requests} · токенов ${(u.today.input_tokens + u.today.output_tokens).toLocaleString()}
+        ${r ? `<div class="bar ${pct <= (state.settings?.limits?.warnAtPercent ?? 10) ? 'hp' : 'food'}" style="margin-top:4px"><div style="width:${Math.max(2, pct)}%"></div></div><div class="hint">осталось ~${pct}%: ${esc(r.reason)}</div>` : '<div class="hint">провайдер не сообщает лимиты; можно задать свой дневной лимит в настройках</div>'}
+      </div></div>`;
+    }).join('');
+  } catch { /* */ }
+}
+setInterval(loadUsage, 10_000);
+
+function showLimit(d) {
+  const b = $('#limitBanner');
+  b.hidden = false;
+  b.className = `banner ${d.level}`;
+  b.innerHTML = `<span>${d.level === 'exhausted' ? '⛔ Лимит закончился' : '⚠ Лимит на исходе'}: ${esc(d.provider)} — ${esc(d.reason)}${d.level === 'warning' ? ` (осталось ~${d.percent}%)` : ''}</span><button type="button">✕</button>`;
+  $('button', b).onclick = () => { b.hidden = true; };
+  loadUsage();
+}
+
+$$('[data-testalert]').forEach((btn) => btn.addEventListener('click', async () => {
+  try { await api('/api/usage/test-alert', { body: { level: btn.dataset.testalert } }); } catch (e) { toast(e); }
+}));
+
 // ------------------------------------------------------------- WebSocket
 function connectWs() {
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
@@ -328,6 +357,7 @@ function connectWs() {
   ws.onmessage = (ev) => {
     const { type, data } = JSON.parse(ev.data);
     if (type === 'log') addLog(data);
+    if (type === 'limit') showLimit(data);
     if (type === 'status') { state.states[data.id] = data; renderCards(); }
     if (type === 'states') { for (const s of data) state.states[s.id] = s; renderCards(); }
     if (type === 'tasks' && data.palId === Number($('#taskPal').value) && $('#tab-tasks').classList.contains('active')) loadTasks();
@@ -340,4 +370,5 @@ await loadSettings();
 await loadPals();
 editPal(state.pals[0]?.id ?? null);
 connectWs();
+loadUsage();
 showTab(pref.get('tab', 'dashboard'));

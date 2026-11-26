@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node --no-warnings=ExperimentalWarning src/index.js",
     "dev": "node --watch --no-warnings=ExperimentalWarning src/index.js",
-    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
+    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js",
+    "export-recipes": "node --no-warnings=ExperimentalWarning scripts/export-recipes.js"
   },
   "engines": {
     "node": ">=22.13"

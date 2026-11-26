@@ -1,5 +1,5 @@
 import { ActionError, countItem, itemByName, placeNearby, gotoPos, sleep } from './util.js';
-import { findBlocks } from '../minecraft/world.js';
+import { findBlocks, inventory } from '../minecraft/world.js';
 
 async function getCraftingTable(pal) {
   const { bot } = pal;
@@ -51,9 +51,9 @@ export default [
       let table = null;
       let recipe = bot.recipesFor(it.id, null, 1, null)[0];
       if (!recipe) {
-        if (!bot.recipesAll(it.id, null, true).length) throw new ActionError(`У ${item} нет рецепта крафта (его добывают, плавят или получают с мобов).`);
+        if (!bot.recipesAll(it.id, null, true).length) throw new ActionError(`${item} не крафтится на верстаке.\n${pal.recipes().describe(item)}`);
         // 2) материалов не хватает даже с верстаком — сразу говорим, чего не хватает
-        if (!bot.recipesFor(it.id, null, 1, true).length) throw new ActionError(`Не хватает материалов для ${item}: ${describeMissing(bot, it)}.`);
+        if (!bot.recipesFor(it.id, null, 1, true).length) throw new ActionError(`Не хватает материалов для ${item}.\n${pal.recipes().describePlan(item, count, inventory(bot))}`);
         // 3) нужен верстак 3x3
         table = await getCraftingTable(pal);
         await gotoPos(pal, table.position, 3);

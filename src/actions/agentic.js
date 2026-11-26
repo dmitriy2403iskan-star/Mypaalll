@@ -1,5 +1,5 @@
 // «Мыслительные» инструменты: восприятие, планирование, память. Они не двигают бота, а дают LLM информацию и структуру.
-import { snapshot, findBlocks, fmtPos } from '../minecraft/world.js';
+import { snapshot, findBlocks, fmtPos, inventory } from '../minecraft/world.js';
 import { ActionError } from './util.js';
 
 export default [
@@ -24,24 +24,35 @@ export default [
   },
   {
     name: 'get_recipe',
-    description: 'Узнать рецепт крафта предмета (какие ингредиенты нужны).',
-    parameters: { type: 'object', properties: { item: { type: 'string' } }, required: ['item'] },
+    description: 'Точный рецепт предмета для версии сервера: станция (инвентарь 2x2 / верстак 3x3 / печь / стол кузнеца), раскладка по клеткам, количество результата. Каждая вариация — отдельный id (iron_pickaxe, а не "кирка").',
+    parameters: { type: 'object', properties: { item: { type: 'string', description: 'id предмета, например iron_pickaxe, oak_door' } }, required: ['item'] },
     async run(pal, { item }) {
-      const { bot } = pal;
-      const it = bot.registry.itemsByName[item];
-      if (!it) throw new ActionError(`Нет предмета ${item}`);
-      const recipes = bot.registry.recipes?.[it.id];
-      if (!recipes?.length) return `${item} не крафтится (добывается, плавится или выпадает с мобов).`;
-      return recipes.slice(0, 2).map((r) => {
-        const need = {};
-        const add = (id) => {
-          const realId = id && typeof id === 'object' ? id.id : id;
-          if (realId === null || realId === undefined || realId < 0) return;
-          const n = bot.registry.items[realId]?.name; if (n) need[n] = (need[n] || 0) + 1;
-        };
-        (r.inShape || []).flat().forEach(add); (r.ingredients || []).forEach(add);
-        return `${JSON.stringify(need)} → ${r.result?.count || 1} ${item}${r.inShape && (r.inShape.length > 2 || r.inShape[0]?.length > 2) ? ' (нужен верстак)' : ''}`;
-      }).join('\n');
+      return pal.recipes().describe(item);
+    },
+  },
+  {
+    name: 'plan_crafting',
+    description: 'Рассчитать всю цепочку для предмета с учётом инвентаря: что добыть (и каким инструментом), какие промежуточные крафты и плавки сделать по порядку. Используй перед сложным крафтом и для create_plan.',
+    parameters: {
+      type: 'object',
+      properties: { item: { type: 'string' }, count: { type: 'number' } },
+      required: ['item'],
+    },
+    async run(pal, { item, count = 1 }) {
+      const bot = pal.bot;
+      return pal.recipes().describePlan(String(item).replace(/^minecraft:/, ''), count, inventory(bot), {
+        hasTable: findBlocks(bot, 'crafting_table', 24, 1).length > 0,
+        hasFurnace: findBlocks(bot, 'furnace', 24, 1).length > 0,
+      });
+    },
+  },
+  {
+    name: 'list_variants',
+    description: 'Все вариации семейства предметов в этой версии: "pickaxe" → wooden_pickaxe, stone_pickaxe…; "door", "slab", "stairs", "boat", "bed"…',
+    parameters: { type: 'object', properties: { family: { type: 'string' } }, required: ['family'] },
+    async run(pal, { family }) {
+      const list = pal.recipes().family(family);
+      return list.length ? `${list.length} шт.: ${list.join(', ')}` : `Ничего не найдено по "${family}".`;
     },
   },
   {

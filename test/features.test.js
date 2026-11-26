@@ -1,0 +1,133 @@
+// Тесты: генератор построек, база крафтов, лимиты.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'mypal-feat-'));
+fs.mkdirSync(path.join(process.env.DATA_DIR, 'recipes'));
+// своя запись в формате спецификации (как будет из TXT)
+fs.writeFileSync(path.join(process.env.DATA_DIR, 'recipes', 'custom.json'), JSON.stringify([
+  { id: 'minecraft:magic_wand', introduced_in: '1.99', recipe: { type: 'crafting_shaped', station: 'crafting_table', pattern: [['minecraft:stick']], output: { count: 1 } } },
+  { id: 'minecraft:stick', recipes: [{ type: 'crafting_shaped', station: 'inventory', pattern: [['minecraft:dead_bush']], output: { count: 1 }, recipe_introduced_in: '1.0' }] },
+]));
+
+const md = (await import('minecraft-data')).default;
+const { RecipeDB, cmpVersion } = await import('../src/knowledge/recipes.js');
+const { house, custom, simple, billOfMaterials } = await import('../src/building/blueprints.js');
+const { isLimitError, parseHeaders, usage, LimitExhaustedError } = await import('../src/llm/usage.js');
+const { settings } = await import('../src/config.js');
+
+const db = new RecipeDB(md('1.20.4'));
+
+test('Рецепт: точная матрица, слоты, 3x3', () => {
+  const r = db.record('iron_pickaxe').recipes[0];
+  assert.deepEqual(r.pattern, [['iron_ingot', 'iron_ingot', 'iron_ingot'], [null, 'stick', null], [null, 'stick', null]]);
+  assert.deepEqual(r.slots, { iron_ingot: [0, 1, 2], stick: [4, 7] });
+  assert.equal(r.allowed_grid, '3x3');
+  assert.equal(r.requires_crafting_table, true);
+});
+
+test('Рецепт: 2x2 в инвентаре, двери ×3, вариации отдельно', () => {
+  assert.equal(db.record('crafting_table').recipes[0].allowed_grid, '2x2');
+  assert.equal(db.record('oak_door').recipes[0].output.count, 3);
+  const picks = db.family('pickaxe');
+  for (const p of ['wooden_pickaxe', 'stone_pickaxe', 'iron_pickaxe', 'golden_pickaxe', 'diamond_pickaxe', 'netherite_pickaxe']) assert.ok(picks.includes(p));
+});
+
+test('Smithing и плавка', () => {
+  const n = db.record('netherite_pickaxe').recipes[0];
+  assert.equal(n.station, 'smithing_table');
+  assert.ok(n.ingredients.diamond_pickaxe && n.ingredients.netherite_ingot);
+  assert.equal(db.record('glass').recipes[0].type, 'smelting');
+});
+
+test('Проверка версий', () => {
+  assert.equal(new RecipeDB(md('1.16.5')).record('cherry_door').exists_in_version, false);
+  assert.equal(new RecipeDB(md('1.20.4')).record('cherry_door').exists_in_version, true);
+  assert.equal(cmpVersion('1.20.4', '1.20'), 1);
+  assert.equal(cmpVersion('1.19', '1.20'), -1);
+});
+
+test('Свои записи из data/recipes подмешиваются', () => {
+  const stick = db.record('stick');
+  assert.ok(stick.recipes.some((r) => r.source === 'custom' && r.ingredients.dead_bush === 1));
+});
+
+test('План крафта: каменная кирка с нуля и с инвентарём', () => {
+  const p = db.craftPlan('stone_pickaxe', 1, {});
+  assert.equal(p.gather.cobblestone, 3);
+  assert.ok(Object.keys(p.gather).some((k) => k.endsWith('_log')));
+  assert.equal(p.steps.at(-1).item, 'stone_pickaxe');
+  const p2 = db.craftPlan('stone_pickaxe', 1, { cobblestone: 5, stick: 4 });
+  assert.deepEqual(p2.gather, {});
+  assert.equal(p2.steps.length, 1);
+  const iron = db.craftPlan('iron_ingot', 3, {});
+  assert.equal(iron.gather.raw_iron, 3); // плавка из сырья, а не разбор блока
+});
+
+test('Дом без подвала и с подвалом', () => {
+  const a = house({ width: 7, length: 7 });
+  const b = house({ width: 7, length: 7, basement: true, basement_depth: 3 });
+  assert.ok(!a.ops.some((o) => o.y < 0));
+  assert.ok(b.ops.some((o) => o.dig && o.y === -3));
+  assert.ok(b.ops.some((o) => o.block === 'ladder' && o.y < 0), 'в подвал ведёт лестница');
+  assert.ok(!a.ops.some((o) => o.block === 'ladder'), 'одноэтажному дому без подвала лестница не нужна');
+  assert.match(a.summary, /без подвала/);
+  assert.match(b.summary, /подвал глубиной 3/);
+});
+
+test('Двухэтажный дом: окна, дверь, лестница, материалы', () => {
+  const h = house({ floors: 2, wall_material: 'cobblestone', window_material: 'glass', roof: 'flat' });
+  const bill = billOfMaterials(h.ops);
+  assert.ok(bill.cobblestone > 50);
+  assert.ok(bill.glass > 0);
+  assert.equal(bill.oak_door, 1);
+  assert.ok(bill.ladder >= 4);
+  // проём двери не заставлен стеной
+  assert.ok(!h.ops.some((o) => o.x === 3 && o.z === 0 && o.y === 2 && o.block));
+});
+
+test('Свой чертёж и простые формы', () => {
+  const c = custom({ layers: [['PPP', 'P-P', 'PPP'], ['G.G']], legend: ['P=oak_planks', 'G=glass'], base_y: -1 });
+  assert.equal(billOfMaterials(c.ops).oak_planks, 8);
+  assert.ok(c.ops.some((o) => o.dig && o.y === -1));
+  assert.throws(() => custom({ layers: [['X']], legend: {} }), /legend/);
+  assert.equal(simple('pit', { width: 2, length: 2, height: 2 }).ops.length, 8);
+});
+
+test('Лимиты: классификация ошибок и заголовков', () => {
+  assert.equal(isLimitError(429, '{"error":{"code":"insufficient_quota"}}').level, 'exhausted');
+  assert.equal(isLimitError(429, 'RESOURCE_EXHAUSTED: Quota exceeded').level, 'exhausted');
+  assert.equal(isLimitError(400, 'Your credit balance is too low').level, 'exhausted');
+  assert.equal(isLimitError(429, 'rate limited').level, 'warning');
+  assert.equal(isLimitError(500, 'oops'), null);
+  const h = parseHeaders(new Headers({ 'anthropic-ratelimit-tokens-limit': '1000', 'anthropic-ratelimit-tokens-remaining': '50' }));
+  assert.deepEqual([h.limitTokens, h.remainingTokens], [1000, 50]);
+});
+
+test('Лимиты: предупреждение при остатке ≤ порога и один раз за эпизод', () => {
+  const events = [];
+  usage.on('warning', (e) => events.push(['warning', e]));
+  usage.on('exhausted', (e) => events.push(['exhausted', e]));
+  const headers = (rem) => new Headers({ 'x-ratelimit-limit-requests': '100', 'x-ratelimit-remaining-requests': String(rem) });
+  usage.record('openai', { inputTokens: 10, outputTokens: 5, headers: headers(50) });
+  assert.equal(events.length, 0);
+  usage.record('openai', { headers: headers(8) });
+  usage.record('openai', { headers: headers(7) });
+  assert.equal(events.length, 1);
+  assert.equal(events[0][0], 'warning');
+  assert.equal(events[0][1].percent, 8);
+  usage.record('openai', { headers: headers(0) });
+  assert.equal(events.at(-1)[0], 'exhausted', 'с warning эскалирует до exhausted');
+});
+
+test('Лимиты: свой дневной бюджет блокирует запросы', async () => {
+  settings.update({ limits: { dailyTokenBudget: 100 } });
+  usage.record('gemini', { inputTokens: 80, outputTokens: 30 });
+  assert.ok(usage.budgetExhausted('gemini'));
+  const { chat } = await import('../src/llm/router.js');
+  await assert.rejects(chat({ provider: 'gemini', messages: [] }), LimitExhaustedError);
+  settings.update({ limits: { dailyTokenBudget: 0 } });
+});

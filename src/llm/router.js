@@ -3,6 +3,7 @@ import { settings } from '../config.js';
 import { OpenAICompatibleProvider } from './openai.js';
 import { AnthropicProvider } from './anthropic.js';
 import { GeminiProvider } from './gemini.js';
+import { usage, parseHeaders, LimitExhaustedError } from './usage.js';
 
 const TYPES = {
   openai: OpenAICompatibleProvider,
@@ -33,8 +34,24 @@ export async function chat({ provider, ...opts }) {
   const p = getProvider(provider);
   const temperature = settings.get().agent.temperature;
   const cfg = settings.provider(provider);
-  // Новые модели Claude не принимают temperature — передаём её только остальным
-  return p.chat({ ...opts, ...(cfg.type === 'anthropic' ? {} : { temperature }) });
+  const over = usage.budgetExhausted(cfg.id);
+  if (over) {
+    usage.alert(cfg.id, 'exhausted', { percent: 0, reason: over });
+    throw new LimitExhaustedError(cfg.id, over);
+  }
+  let res;
+  try {
+    // Новые модели Claude не принимают temperature — передаём её только остальным
+    res = await p.chat({ ...opts, ...(cfg.type === 'anthropic' ? {} : { temperature }) });
+  } catch (e) {
+    const status = e.status ?? e.response?.status;
+    if (e.headers) usage.live[cfg.id] = { ...usage.live[cfg.id], headers: parseHeaders(e.headers), updatedAt: Date.now() };
+    const limitErr = usage.recordError(cfg.id, status, e.body || e.message);
+    throw limitErr || e;
+  }
+  usage.record(cfg.id, { ...res.usage, headers: res.headers });
+  if (cfg.type === 'openai' && /openrouter\.ai/.test(cfg.baseUrl || '')) usage.refreshOpenRouterCredits(cfg.id, cfg.baseUrl, cfg.apiKey);
+  return res;
 }
 
 /** Быстрая проверка ключа из веб-панели. */

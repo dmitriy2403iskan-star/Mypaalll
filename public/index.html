@@ -21,9 +21,12 @@
   </header>
 
   <main>
+    <div id="limitBanner" class="banner" hidden></div>
     <!-- ДАШБОРД -->
     <section id="tab-dashboard" class="tab active">
       <div id="palCards" class="grid"></div>
+      <h3>Расход LLM сегодня</h3>
+      <div id="usageBox" class="list"><div class="hint">Пока запросов не было.</div></div>
       <h3>Журнал</h3>
       <div id="log" class="log"></div>
     </section>
@@ -137,6 +140,29 @@
             </label>
           </div>
           <p class="hint">Для одиночного мира: Esc → «Открыть для сети» → укажи показанный порт.</p>
+        </div>
+
+        <div class="card">
+          <h3>Лимиты</h3>
+          <p class="hint">Когда лимит на исходе, pal пишет предупреждение в игровой чат несколько раз подряд. Остаток считается по заголовкам провайдера (x-ratelimit / anthropic-ratelimit), балансу OpenRouter, ошибкам «квота исчерпана» и твоему дневному бюджету. В шаблонах сообщений доступны {percent}, {reason}, {provider}.</p>
+          <div class="row">
+            <label class="check"><input type="checkbox" name="limits.enabled"> Следить за лимитами</label>
+            <label>Предупреждать при остатке ≤ % <input name="limits.warnAtPercent" type="number" min="1" max="90"></label>
+            <label>Сколько раз писать в чат <input name="limits.spamCount" type="number" min="1" max="10"></label>
+            <label>Пауза между, сек <input name="limits.spamIntervalSec" type="number" step="0.5" min="0.5"></label>
+            <label>Не чаще, мин <input name="limits.cooldownMinutes" type="number" min="1"></label>
+          </div>
+          <div class="row">
+            <label>Свой дневной лимит токенов (0 = нет) <input name="limits.dailyTokenBudget" type="number" min="0"></label>
+            <label>Свой дневной лимит запросов (0 = нет) <input name="limits.dailyRequestBudget" type="number" min="0"></label>
+            <label class="check"><input type="checkbox" name="limits.useProviderHeaders"> Читать лимиты из ответов провайдера</label>
+          </div>
+          <label>Текст «лимит на исходе» <input name="limits.warnMessage"></label>
+          <label>Текст «лимит закончился» <input name="limits.exhaustedMessage"></label>
+          <div class="row">
+            <button type="button" class="secondary" data-testalert="warning">Проверить предупреждение в игре</button>
+            <button type="button" class="secondary" data-testalert="exhausted">Проверить «лимит закончился»</button>
+          </div>
         </div>
 
         <div class="card">

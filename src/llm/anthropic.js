@@ -47,19 +47,22 @@ export class AnthropicProvider {
       ...(this.cfg.effort ? { output_config: { effort: this.cfg.effort } } : {}),
     };
 
-    let res;
-    if (this.cfg.fallbacks) {
+    // withResponse() даёт доступ к заголовкам anthropic-ratelimit-* для учёта лимитов
+    const { data: res, response } = this.cfg.fallbacks
       // Server-side fallback: если модель откажет (stop_reason "refusal"), запрос автоматически уйдёт на запасную модель.
-      res = await this.client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
-    } else {
-      res = await this.client.messages.create(params);
-    }
+      ? await this.client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }).withResponse()
+      : await this.client.messages.create(params).withResponse();
 
+    const u = res.usage || {};
+    const usage = {
+      inputTokens: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
+      outputTokens: u.output_tokens || 0,
+    };
     if (res.stop_reason === 'refusal') {
-      return { text: 'Извини, с этим я помочь не могу.', toolCalls: [], usage: res.usage };
+      return { text: 'Извини, с этим я помочь не могу.', toolCalls: [], usage, headers: response.headers };
     }
     const text = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
     const toolCalls = res.content.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, args: b.input ?? {} }));
-    return { text, toolCalls, usage: res.usage, raw: { provider: 'anthropic', content: res.content } };
+    return { text, toolCalls, usage, headers: response.headers, raw: { provider: 'anthropic', content: res.content } };
   }
 }

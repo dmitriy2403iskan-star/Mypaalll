@@ -45,6 +45,18 @@ function defaults() {
       historyLength: 20,       // сколько последних реплик держать в краткосрочной памяти
       language: 'ru',
     },
+    limits: {
+      enabled: true,
+      warnAtPercent: 10,        // предупреждать, когда осталось ≤ 10% лимита
+      spamCount: 4,             // сколько раз написать в чат (3-5)
+      spamIntervalSec: 1.5,     // пауза между повторами
+      cooldownMinutes: 15,      // не повторять предупреждение чаще
+      dailyTokenBudget: 0,      // свой дневной лимит токенов на провайдера (0 = выкл)
+      dailyRequestBudget: 0,    // свой дневной лимит запросов (0 = выкл)
+      useProviderHeaders: true, // читать x-ratelimit-* / anthropic-ratelimit-* заголовки
+      warnMessage: '⚠ LIMITS ALMOST RAN OUT! Осталось ~{percent}% ({reason}) [{provider}]',
+      exhaustedMessage: '⛔ LIMITS RAN OUT! {reason} [{provider}]. Смени ключ или провайдера в панели.',
+    },
     reflex: {
       autoEat: true,
       selfDefense: true,

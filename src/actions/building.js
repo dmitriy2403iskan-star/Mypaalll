@@ -1,102 +1,112 @@
-// Строительство по чертежам. LLM выбирает «что» (тип, размер, материал), а код решает «как» ставить блоки.
-import { ActionError, countItem, placeAt, Vec3, isAir } from './util.js';
+// Строительство. LLM описывает ЧТО построить (параметры или свой чертёж), а executor решает КАК.
+import { ActionError, Vec3, isAir, placeAt } from './util.js';
+import { house, simple, custom } from '../building/blueprints.js';
+import { resolveOrigin, analyze, execute, fmt } from '../building/executor.js';
 
-/** Генераторы чертежей: возвращают список относительных координат {x,y,z} (y=0 — уровень пола). */
-const BLUEPRINTS = {
-  platform: ({ w, l }) => box(w, l, 1, { fill: true }).map((p) => ({ ...p, y: -1 })),
-  wall: ({ w, h }) => { const out = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out.push({ x, y, z: 0 }); return out; },
-  tower: ({ w, h }) => box(w, w, h, { hollow: true }),
-  box: ({ w, l, h }) => box(w, l, h, { hollow: true, roof: true }),
-  hut: ({ w, l, h }) => {
-    const door = { x: Math.floor(w / 2), z: 0 };
-    return box(w, l, h, { hollow: true, roof: true })
-      .filter((p) => !(p.x === door.x && p.z === door.z && (p.y === 0 || p.y === 1)));
-  },
+const POS = {
+  x: { type: 'number', description: 'Угол постройки X (необязательно: по умолчанию перед ботом)' },
+  y: { type: 'number', description: 'Уровень пола (необязательно: по умолчанию уровень земли)' },
+  z: { type: 'number' },
+  dry_run: { type: 'boolean', description: 'true — только посчитать материалы и показать план, ничего не строить' },
+  allow_partial: { type: 'boolean', description: 'Строить, даже если материалов не хватает на всё' },
 };
 
-function box(w, l, h, { hollow = false, roof = false, fill = false } = {}) {
-  const out = [];
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      for (let z = 0; z < l; z++) {
-        const edge = x === 0 || z === 0 || x === w - 1 || z === l - 1;
-        if (fill || !hollow || edge) out.push({ x, y, z });
-      }
-    }
+async function run(pal, plan, args, title) {
+  const { bot } = pal;
+  const origin = resolveOrigin(bot, args, plan.size);
+  if (args.dry_run) {
+    const a = analyze(bot, origin, plan.ops);
+    return `${title}: ${plan.summary}. Угол ${origin}, размер ${plan.size.w}x${plan.size.l}, высота ~${plan.size.h}.
+Нужно материалов: ${fmt(a.bill)}. ${Object.keys(a.missing).length ? `Не хватает: ${fmt(a.missing)}.` : 'Всего хватает.'}
+Копать блоков: ${a.digs}.`;
   }
-  if (roof) for (let x = 0; x < w; x++) for (let z = 0; z < l; z++) out.push({ x, y: h, z });
-  return out;
+  const r = await execute(pal, origin, plan.ops, { allowPartial: args.allow_partial });
+  if (r.note) return r.note;
+  pal.memory.add('episodic', `Построил ${plan.summary} в ${origin}`, 3);
+  if (args.remember_as) pal.memory.saveLocation(args.remember_as, origin.offset(Math.floor(plan.size.w / 2), 1, -1), bot.game.dimension);
+  const parts = [`${title} готов: ${plan.summary}. Поставлено ${r.placed}, выкопано ${r.dug}. Угол ${origin}.`];
+  if (r.skipped.length) parts.push(`Пропущено: ${r.skipped.slice(0, 5).join('; ')}.`);
+  if (r.failed.length) parts.push(`Не получилось ${r.failed.length}: ${r.failed.slice(0, 3).join('; ')}.`);
+  if (!r.placed && !r.dug) throw new ActionError(parts.join(' '));
+  return parts.join(' ');
 }
 
 export default [
   {
-    name: 'build_structure',
-    description: 'Построить простую постройку рядом. Типы: hut (домик с дверным проёмом и крышей), box (закрытая коробка), wall (стена), tower (полая башня), platform (пол). Перед этим собери достаточно материала — функция сообщит, сколько нужно.',
+    name: 'build_house',
+    description: `Построить дом по параметрам. Переводи просьбу игрока в параметры:
+«с подвалом» → basement=true, «без подвала» → basement=false (по умолчанию без подвала),
+«двухэтажный» → floors=2, «без окон» → windows=false, «плоская крыша» → roof="flat", «из камня» → wall_material="cobblestone".
+Лестницы (ladder) между этажами и в подвал ставятся автоматически. Сначала вызови с dry_run=true, чтобы узнать материалы, собери их, затем строй.`,
     parameters: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: Object.keys(BLUEPRINTS) },
-        material: { type: 'string', description: 'Блок из инвентаря, например oak_planks, cobblestone' },
-        width: { type: 'number', description: 'по умолчанию 5' },
-        length: { type: 'number', description: 'по умолчанию 5' },
-        height: { type: 'number', description: 'по умолчанию 3' },
-        x: { type: 'number', description: 'Угол постройки (необязательно; по умолчанию в 2 блоках перед ботом)' },
-        y: { type: 'number' },
-        z: { type: 'number' },
-        dry_run: { type: 'boolean', description: 'true — только посчитать нужный материал' },
+        width: { type: 'number', description: 'Ширина (5-21), по умолчанию 7' },
+        length: { type: 'number', description: 'Длина (5-21), по умолчанию 7' },
+        floors: { type: 'number', description: 'Этажей (1-4), по умолчанию 1' },
+        floor_height: { type: 'number', description: 'Высота этажа 3-6, по умолчанию 4' },
+        basement: { type: 'boolean', description: 'Есть ли подвал' },
+        basement_depth: { type: 'number', description: 'Глубина подвала 2-6, по умолчанию 3' },
+        basement_lined: { type: 'boolean', description: 'Обшить стены подвала материалом стен' },
+        roof: { type: 'string', enum: ['gable', 'flat', 'none'], description: 'gable — двускатная (по умолчанию)' },
+        wall_material: { type: 'string', description: 'по умолчанию oak_planks' },
+        floor_material: { type: 'string' },
+        roof_material: { type: 'string' },
+        corner_material: { type: 'string', description: 'Угловые столбы, например oak_log' },
+        windows: { type: 'boolean', description: 'по умолчанию true' },
+        window_material: { type: 'string', description: 'glass_pane (по умолчанию) или glass' },
+        door: { type: 'boolean', description: 'по умолчанию true' },
+        door_material: { type: 'string', description: 'например spruce_door' },
+        torches: { type: 'boolean', description: 'Факелы внутри, если есть в инвентаре' },
+        remember_as: { type: 'string', description: 'Сохранить как место (например "дом")' },
+        ...POS,
       },
-      required: ['type', 'material'],
     },
     async run(pal, args) {
-      const { bot } = pal;
-      const w = clamp(args.width ?? 5, 1, 15);
-      const l = clamp(args.length ?? 5, 1, 15);
-      const h = clamp(args.height ?? 3, 1, 8);
-      const plan = BLUEPRINTS[args.type]?.({ w, l, h });
-      const size = args.type === 'wall' ? `${w}x${h}` : args.type === 'platform' ? `${w}x${l}` : `${w}x${l}x${h}`;
-      if (!plan) throw new ActionError(`Неизвестный тип постройки ${args.type}`);
-
-      let origin;
-      if (args.x !== undefined && args.z !== undefined) {
-        origin = new Vec3(Math.round(args.x), Math.round(args.y ?? bot.entity.position.y), Math.round(args.z));
-      } else {
-        const p = bot.entity.position.floored();
-        const yaw = bot.entity.yaw;
-        origin = p.offset(Math.round(-Math.sin(yaw) * 3) - Math.floor(w / 2), 0, Math.round(-Math.cos(yaw) * 3) - Math.floor(l / 2));
-        origin.y = surfaceY(bot, origin.x, origin.z, p.y);
-      }
-
-      const targets = plan.map((r) => origin.offset(r.x, r.y, r.z))
-        .filter((pos) => isReplaceable(bot.blockAt(pos)));
-      const have = countItem(bot, args.material);
-      if (!targets.length) throw new ActionError(`Место ${origin} уже занято блоками. Отойди на ровное место или укажи координаты x,y,z.`);
-      if (args.dry_run) return `Для ${args.type} ${size} нужно ${targets.length} ${args.material}, есть ${have}. Угол: ${origin}.`;
-      if (have < targets.length) {
-        throw new ActionError(`Не хватает материала: нужно ${targets.length} ${args.material}, есть ${have}. Добудь/скрафти ещё ${targets.length - have}.`);
-      }
-
-      // строим снизу вверх, ближние блоки первыми
-      targets.sort((a, b) => a.y - b.y || a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
-      let placed = 0;
-      const failed = [];
-      let pending = targets;
-      // несколько проходов: блоки, которым не к чему было прикрепиться, получают опору на следующем проходе
-      for (let pass = 0; pass < 3 && pending.length && !pal.interrupted; pass++) {
-        const next = [];
-        for (const pos of pending) {
-          if (pal.interrupted) break;
-          try {
-            if (await placeAt(pal, args.material, pos)) placed++;
-          } catch (e) {
-            next.push(pos);
-            if (pass === 2) failed.push(`${pos}: ${e.message}`);
-          }
-        }
-        pending = next;
-      }
-      pal.memory.add('episodic', `Построил ${args.type} ${size} из ${args.material} в ${origin}`, 3);
-      if (!placed) throw new ActionError(`Ничего не удалось построить. ${failed.slice(0, 3).join('; ')}`);
-      return `Построил ${args.type}: поставил ${placed}/${targets.length} блоков в районе ${origin}.${failed.length ? ` Не получилось ${failed.length}: ${failed.slice(0, 2).join('; ')}` : ''}`;
+      return run(pal, house(args), args, 'Дом');
+    },
+  },
+  {
+    name: 'build_structure',
+    description: 'Простая форма: wall (стена), platform (пол), tower (полая башня), box (закрытая коробка), pillar (столб), pit (яма/котлован).',
+    parameters: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['wall', 'platform', 'tower', 'box', 'pillar', 'pit'] },
+        material: { type: 'string', description: 'Блок из инвентаря' },
+        width: { type: 'number' }, length: { type: 'number' }, height: { type: 'number' },
+        ...POS,
+      },
+      required: ['type'],
+    },
+    async run(pal, args) {
+      if (args.type !== 'pit' && !args.material) throw new ActionError('Укажи material');
+      return run(pal, simple(args.type, args), args, 'Постройка');
+    },
+  },
+  {
+    name: 'build_custom',
+    description: `Построить что угодно по своему чертежу (когда параметров build_house не хватает: башня с зубцами, мост, беседка, ферма, необычный дом).
+layers — слои снизу вверх; каждый слой — массив строк (строка = ряд по z, символ = блок по x).
+legend — что значит символ, массив строк вида "P=oak_planks", например ["P=oak_planks","G=glass_pane","L=oak_log","D=oak_door"].
+"." или пробел — не трогать, "-" — выкопать/очистить. base_y — высота первого слоя относительно земли (например -3 для подвала).
+Держи чертёж компактным (до ~15x15). Сначала dry_run=true.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        layers: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
+        legend: { type: 'array', items: { type: 'string' }, description: 'Символ=блок, например "P=oak_planks"' },
+        base_y: { type: 'number' },
+        name: { type: 'string', description: 'Как назвать постройку' },
+        remember_as: { type: 'string' },
+        ...POS,
+      },
+      required: ['layers', 'legend'],
+    },
+    async run(pal, args) {
+      const plan = custom(args);
+      if (args.name) plan.summary = `${args.name} (${plan.summary})`;
+      return run(pal, plan, args, 'Постройка');
     },
   },
   {
@@ -124,16 +134,3 @@ export default [
     },
   },
 ];
-
-/** Уровень земли: первая пустая клетка над твёрдым блоком рядом с высотой y. */
-function surfaceY(bot, x, z, y) {
-  for (let yy = y + 4; yy >= y - 6; yy--) {
-    const here = bot.blockAt(new Vec3(x, yy, z));
-    const below = bot.blockAt(new Vec3(x, yy - 1, z));
-    if (here && isReplaceable(here) && below?.boundingBox === 'block') return yy;
-  }
-  return y;
-}
-const isReplaceable = (b) => isAir(b) || ['water', 'short_grass', 'grass', 'tall_grass', 'snow'].includes(b.name);
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(Number(v) || a)));

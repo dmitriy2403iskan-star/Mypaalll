@@ -1,4 +1,5 @@
 // Провайдер Google Gemini (REST generateContent с function calling).
+import { httpError } from './openai.js';
 
 // Gemini принимает только подмножество JSON Schema — убираем неподдерживаемые поля.
 function cleanSchema(s) {
@@ -63,13 +64,18 @@ export class GeminiProvider {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(120_000),
     });
-    if (!res.ok) throw new Error(`gemini: HTTP ${res.status} ${(await res.text()).slice(0, 500)}`);
+    if (!res.ok) throw httpError('gemini', res.status, await res.text(), res.headers);
     const data = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
     const text = parts.filter((p) => p.text && !p.thought).map((p) => p.text).join('');
     const toolCalls = parts.filter((p) => p.functionCall).map((p, i) => ({
       id: `gem_${Date.now()}_${i}`, name: p.functionCall.name, args: p.functionCall.args ?? {},
     }));
-    return { text, toolCalls, usage: data.usageMetadata, raw: { provider: 'gemini', parts } };
+    const u = data.usageMetadata || {};
+    return {
+      text, toolCalls,
+      usage: { inputTokens: u.promptTokenCount || 0, outputTokens: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0) },
+      raw: { provider: 'gemini', parts },
+    };
   }
 }
