@@ -1,4 +1,5 @@
 // Веб-панель MyPal (без фреймворков).
+import { renderTutor } from './tutor.js';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -23,7 +24,7 @@ function showTab(name) {
   $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   $$('.tab').forEach((t) => t.classList.toggle('active', t.id === `tab-${name}`));
   pref.set('tab', name);
-  ({ memory: loadMemory, tasks: loadTasks, settings: loadSettings, chat: loadChat })[name]?.();
+  ({ memory: loadMemory, tasks: loadTasks, settings: loadSettings, chat: loadChat, tutor: loadTutor })[name]?.();
 }
 $$('#tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -334,6 +335,16 @@ function toggleEdition() {
 }
 $('[name="minecraft.edition"]').addEventListener('change', toggleEdition);
 
+// ------------------------------------------------------------- туториал
+function loadTutor() {
+  renderTutor($('#tutorRoot'), {
+    settings: state.settings,
+    pals: state.pals,
+    apiPut: (patch) => api('/api/settings', { method: 'PUT', body: patch }),
+    onApplied: () => loadSettings(),
+  });
+}
+
 // ------------------------------------------------------------- лимиты
 async function loadUsage() {
   try {
@@ -385,4 +396,5 @@ await loadPals();
 editPal(state.pals[0]?.id ?? null);
 connectWs();
 loadUsage();
-showTab(pref.get('tab', 'dashboard'));
+// при первом запуске сразу показываем, как подключить pal'а к игре
+showTab(pref.get('tab', 'tutor'));

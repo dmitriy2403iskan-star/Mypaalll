@@ -89,3 +89,19 @@ code { background: var(--panel2); padding: 1px 4px; border-radius: 4px; }
   #conn::first-letter { font-size: 12px; }
   main { padding: 12px; }
 }
+
+/* туториал */
+.tutor-head h2 { margin: 4px 0 6px; font-size: 20px; }
+.seg { display: inline-flex; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; margin: 8px 0 12px; }
+.seg button { background: transparent; color: var(--muted); padding: 8px 16px; border-radius: 8px; }
+.seg button.on { background: var(--accent); color: #0d1a0f; }
+.tutor-card h4 { margin: 18px 0 6px; font-size: 15px; }
+.tutor-card p { margin: 6px 0; }
+.tsteps { margin: 4px 0 8px; padding-left: 22px; line-height: 1.6; }
+.tsteps li { margin: 4px 0; }
+.tfaq { padding-left: 18px; line-height: 1.55; }
+.tfaq li { margin: 6px 0; }
+.note { background: var(--panel2); border-left: 3px solid var(--accent2); padding: 8px 10px; border-radius: 6px; }
+.cmd { display: inline-flex; align-items: center; gap: 2px; margin: 2px 4px 2px 0; white-space: nowrap; max-width: 100%; }
+.cmd code { overflow: hidden; text-overflow: ellipsis; }
+.copy { background: transparent; color: var(--muted); padding: 0 4px; font-weight: 400; }

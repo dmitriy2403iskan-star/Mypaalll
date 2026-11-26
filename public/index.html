@@ -16,6 +16,7 @@
   <header>
     <div class="brand">⛏ MyPal</div>
     <nav id="tabs">
+      <button data-tab="tutor">❓ Как запустить</button>
       <button data-tab="dashboard" class="active">Дашборд</button>
       <button data-tab="chat">Чат</button>
       <button data-tab="pals">Pals</button>
@@ -28,6 +29,9 @@
 
   <main>
     <div id="limitBanner" class="banner" hidden></div>
+    <!-- ТУТОРИАЛ -->
+    <section id="tab-tutor" class="tab"><div id="tutorRoot"></div></section>
+
     <!-- ДАШБОРД -->
     <section id="tab-dashboard" class="tab active">
       <div id="palCards" class="grid"></div>
