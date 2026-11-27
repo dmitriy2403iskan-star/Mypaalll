@@ -109,8 +109,8 @@ try {
 
     // ---- РУКИ: поставить и сломать блок без команд ----
     results.hands = { serverAuthBreaking: alex.hands?.serverAuthBreaking };
-    await alex.command('give Alex dirt 8', 6000); // подготовка
-    await sleep(1500);
+    // подготовка (иногда сервер выдаёт не сразу — повторяем)
+    for (let k = 0; k < 3 && !alex.inventory.count('dirt'); k++) { results.hands.give = (await alex.command('give Alex dirt 8', 6000)).output; await sleep(1500); }
     results.hands.dirtBefore = alex.inventory.count('dirt');
     results.hands.inventory = alex.inventory.summary();
     const me = alex.movement.position;
@@ -168,9 +168,12 @@ try {
 
     // ---- КРАФТ без команд: доски (2x2), палки, верстак, кирка (3x3 у верстака) ----
     results.craft = { recipes: alex.crafting?.recipes.length || 0, serverAuthInventory: alex.serverAuthInventory };
-    let g = await alex.command('give Alex oak_log 3', 6000);
-    if (!g.success) g = await alex.command('give Alex log 3', 6000);
-    await sleep(1500);
+    const logs = () => alex.inventory.count('oak_log') + alex.inventory.count('log');
+    for (let k = 0; k < 3 && !logs(); k++) {
+      const g = await alex.command('give Alex oak_log 3', 6000);
+      if (!g.success) await alex.command('give Alex log 3', 6000);
+      await sleep(1500);
+    }
     const responses = [];
     const detail = []; const pk = {};
     const onResp = (p) => { for (const r of p.responses || []) { responses.push(r.status); if (detail.length < 6) detail.push(JSON.stringify(r, (k, x) => (typeof x === 'bigint' ? String(x) : x)).slice(0, 400)); } };

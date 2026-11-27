@@ -369,7 +369,14 @@ export class Crafting {
   addOutput(dest, out, n) {
     const inv = this.body.inventory;
     const cur = inv.slots[dest];
-    inv.slots[dest] = cur?.network_id ? { ...cur, count: cur.count + n } : { ...out, count: n, has_stack_id: 1, stack_id: 0 };
+    if (cur?.network_id) { inv.slots[dest] = { ...cur, count: cur.count + n }; return; }
+    const item = { ...out, count: n, has_stack_id: 1, stack_id: 0 };
+    // в рецепте у блоков бывает block_runtime_id = 0; сервер сверяет предмет в руке — берём настоящий id блока
+    if (!item.block_runtime_id) {
+      const w = this.body.world; const blk = w?.registry?.blocksByName?.[inv.nameOf(out)];
+      if (blk) { try { item.block_runtime_id = w.runtimeIdOfState(blk.defaultState) || 0; } catch { /* */ } }
+    }
+    inv.slots[dest] = item;
   }
 
   /** Открыть свой инвентарь (как кнопка E) — некоторые сервера крафтят 2x2 только при открытом экране. */
