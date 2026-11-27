@@ -73,6 +73,16 @@ export class Crafting {
   get md() { return (this._md ||= require('minecraft-data')(`bedrock_${this.body.version || this.body.client.options?.version}`)); }
   get types() { return this.md.protocol.types; }
 
+  /** Значение has_stack_id в формате версии: в 1.26.60+ это bool, раньше — u8 (иначе stack_id не запишется). */
+  get stackFlag() {
+    if (this._stackFlag === undefined) {
+      const it = this.types.ItemV4 || this.types.Item;
+      const flat = JSON.stringify(it || '');
+      this._stackFlag = /"has_stack_id","type":"bool"/.test(flat) ? true : 1;
+    }
+    return this._stackFlag;
+  }
+
   onCraftingData(p) {
     const add = (shape, r) => {
       if (!r || r.network_id === undefined) return;
@@ -198,7 +208,7 @@ export class Crafting {
     if (t === 'ItemStackRequestInstanceDescriptor') {
       return r.output.map((o) => ({
         type: 'name', legacy_type: LEGACY_DESCRIPTOR.name, name: `minecraft:${this.body.inventory.nameOf(o)}`, metadata: o.metadata || 0,
-        count: (o.count || 1) * times, block_runtime_id: o.block_runtime_id || 0, extra: o.extra || { has_nbt: 0, can_place_on: [], can_destroy: [] },
+        count: (o.count || 1) * times, block_runtime_id: o.block_runtime_id || 0, extra: o.extra || { has_nbt: 'false', can_place_on: [], can_destroy: [] },
       }));
     }
     return r.output.map((o) => ({ ...o, count: (o.count || 1) * times }));
@@ -250,7 +260,7 @@ export class Crafting {
         if (!s.count) { inv.slots[i] = null; continue; }
         const base = inv.slots[i] || (placed && placed.slot === i ? placed.item : null);
         if (!base) continue;
-        inv.slots[i] = { ...base, count: s.count, stack_id: s.item_stack_id ?? base.stack_id, has_stack_id: 1 };
+        inv.slots[i] = { ...base, count: s.count, stack_id: s.item_stack_id ?? base.stack_id, has_stack_id: this.stackFlag };
       }
     }
     return seen;
@@ -370,7 +380,7 @@ export class Crafting {
     const inv = this.body.inventory;
     const cur = inv.slots[dest];
     if (cur?.network_id) { inv.slots[dest] = { ...cur, count: cur.count + n }; return; }
-    const item = { ...out, count: n, has_stack_id: 1, stack_id: 0 };
+    const item = { ...out, count: n, has_stack_id: this.stackFlag, stack_id: 0 };
     // в рецепте у блоков бывает block_runtime_id = 0; сервер сверяет предмет в руке — берём настоящий id блока
     if (!item.block_runtime_id) {
       const w = this.body.world; const blk = w?.registry?.blocksByName?.[inv.nameOf(out)];
