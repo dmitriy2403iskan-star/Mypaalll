@@ -283,6 +283,11 @@ try {
     // печь: булыжник → камень
     const smeltPk = {}; const onSP = (pk) => { const n = pk?.data?.name; if (n && !skip.test(n)) smeltPk[n] = (smeltPk[n] || 0) + 1; };
     alex.client.on('packet', onSP);
+    if (/^1\.16/.test(v)) { // диагностика: открывается ли на 1.16 печь, поставленная командой
+      const m = alex.movement.position;
+      await alex.command(`setblock ${Math.floor(m.x)} ${Math.floor(m.y)} ${Math.floor(m.z) + 2} furnace`, 6000);
+      await sleep(800);
+    }
     const furnaceBefore = H.findBlocksNear(alex, 'furnace', 24, 3).map((b) => b.name).join(',');
     await step('smelt', () => H.smeltItem(pal, 'cobblestone', 1));
     alex.client.off('packet', onSP);
