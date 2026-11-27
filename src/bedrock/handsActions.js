@@ -130,16 +130,18 @@ async function ensureTable(pal) {
   let table = findBlocksNear(body, 'crafting_table', 24, 1)[0];
   if (!table) {
     if (!body.inventory.count('crafting_table')) await craftItem(pal, 'crafting_table', 1, { noTable: true });
+    body.crafting.closeWindow();
+    let why = '';
     const me = body.movement.position;
     const bx = Math.floor(me.x); const by = Math.floor(me.y); const bz = Math.floor(me.z);
     for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 1], [1, 2], [-2, -1], [-1, -2]]) {
       const c = { x: bx + dx, y: by, z: bz + dz };
       const here = body.blockAt(c.x, c.y, c.z); const down = body.blockAt(c.x, c.y - 1, c.z);
       if (here && AIR.test(here.name) && down?.solid) {
-        try { if (await body.placeBlock(c, 'crafting_table')) { table = c; break; } } catch { /* следующая клетка */ }
+        try { if (await body.placeBlock(c, 'crafting_table')) { table = c; break; } why = 'сервер не подтвердил'; } catch (e) { why = e.message; }
       }
     }
-    if (!table) throw new ActionError('Не получилось поставить верстак рядом');
+    if (!table) throw new ActionError(`Не получилось поставить верстак рядом${why ? `: ${why}` : ''}`);
   }
   await approach(pal, table, 3);
   if (!(await body.crafting.openTable(table))) throw new ActionError('Верстак не открылся');

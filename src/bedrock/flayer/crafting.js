@@ -382,7 +382,7 @@ export class Crafting {
     });
     const data = { action_id: 'open_inventory', target_entity_id: this.body.runtimeId };
     if (this.types.packet_interact[1].some((f) => f.name === 'has_position')) data.has_position = false;
-    try { this.body.client.queue('interact', data); } catch { return false; }
+    try { this.body.client.queue('interact', data); this.inventoryOpened = true; } catch { return false; }
     return opened;
   }
 
@@ -440,6 +440,9 @@ export class Crafting {
   }
 
   closeWindow() {
+    // инвентарь открывали, а container_open не пришёл — всё равно закрываем, иначе сервер не даст ставить блоки
+    if (!this.window && this.inventoryOpened) this.window = { id: 'inventory', type: 'inventory' };
+    this.inventoryOpened = false;
     if (!this.window) return;
     const w = this.window;
     this.window = null;
