@@ -32,4 +32,4 @@ jobs:
           DEBUG: ${{ matrix.version != '1.26.60' && 'raknet' || '' }}
       - name: Сетевой лог (при ошибке)
         if: failure()
-        run: grep -vE '^\s*$' test.log | grep -iE 'raknet|connect|incompat|pong|request|reply|mtu|protocol|error' | head -120
+        run: grep -vE '^\s*$' test.log | grep -iE 'mypal|raknet|connect|incompat|pong|request|reply|mtu|protocol|error' | head -120

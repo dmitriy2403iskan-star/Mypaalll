@@ -54,6 +54,9 @@ export class BedrockBody extends EventEmitter {
       // вход через Microsoft: код и ссылка показываются в панели и в консоли
       onMsaCode: (data) => this.emit('msaCode', data),
       conLog: () => {},
+      // RakNet в основном потоке: в worker-потоке не действует заплатка протокола (см. protocol.js),
+      // и на телефоне лишний поток только тратит память
+      useRaknetWorkers: false,
     };
     if (o.version) options.version = o.version;
     if (o.realm) { options.realms = { realmName: o.realm }; delete options.host; delete options.port; }
