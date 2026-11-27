@@ -486,8 +486,16 @@ export class Crafting {
       const on = () => { clearTimeout(t); resolve(true); };
       this.body.once('containerOpen', on);
     });
+    // как с верстаком: клик по грани, затем другим способом (у старых серверов свои правила)
     await this.body.hands.useBlock(pos);
-    if (!(await opened)) return false;
+    let ok = await Promise.race([opened, sleep(1200).then(() => false)]);
+    if (!ok) {
+      const hands = this.body.hands;
+      hands.useItem({ action_type: 'click_block', block_position: pos, face: hands.faceToward(pos), click_pos: { x: 0.5, y: 0.5, z: 0.5 }, block_runtime_id: hands.runtimeIdOf(pos) }, !hands.viaAuthInput());
+      hands.swing();
+      ok = await opened;
+    }
+    if (!ok) return false;
     // содержимое приходит сразу после открытия
     for (let i = 0; i < 10 && !this.containers.has(String(this.window?.id)); i++) await sleep(100);
     return true;

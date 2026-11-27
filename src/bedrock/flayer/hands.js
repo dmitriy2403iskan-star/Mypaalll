@@ -22,8 +22,15 @@ export class Inventory {
     c.on('start_game', (p) => loadStates(p.itemstates));
     c.on('item_registry', (p) => loadStates(p.itemstates));
     const isInv = (w) => w === 'inventory' || w === 0;
-    c.on('inventory_content', (p) => { if (isInv(p.window_id)) (p.input || []).forEach((it, i) => { if (i < 36) this.slots[i] = it; }); });
-    c.on('inventory_slot', (p) => { if (isInv(p.window_id) && p.slot < 36) this.slots[p.slot] = p.item; });
+    const isHotbar = (w) => w === 'hotbar' || w === 122;
+    c.on('inventory_content', (p) => {
+      if (isInv(p.window_id)) (p.input || []).forEach((it, i) => { if (i < 36) this.slots[i] = it; });
+      else if (isHotbar(p.window_id)) (p.input || []).forEach((it, i) => { if (i < 9) this.slots[i] = it; });
+      this.body.emit('inventoryChanged');
+    });
+    c.on('inventory_slot', (p) => {
+      if ((isInv(p.window_id) && p.slot < 36) || (isHotbar(p.window_id) && p.slot < 9)) { this.slots[p.slot] = p.item; this.body.emit('inventoryChanged'); }
+    });
     c.on('mob_equipment', (p) => { if (String(p.runtime_entity_id) === String(body.runtimeId)) this.selected = p.selected_slot ?? p.slot ?? this.selected; });
     // предметы, лежащие на земле (дроп после ломания) — чтобы подойти и подобрать
     this.drops = new Map();

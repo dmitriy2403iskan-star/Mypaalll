@@ -221,6 +221,14 @@ try {
 
     // ---- КАК В JAVA: еда, броня, отдать игроку, сундук, бой, печь — всё без команд ----
     const J = (results.java = {});
+    // какие пакеты инвентаря шлёт сервер (окно:слот) — для отладки учёта предметов
+    const invPk = { Alex: [], Steve: [] };
+    for (const [who, b] of [['Alex', alex], ['Steve', steve]]) {
+      b.client.on('packet', (pk) => {
+        const n = pk?.data?.name; const d = pk?.data?.params;
+        if (/^inventory_(slot|content)$|^player_hotbar$/.test(n || '') && invPk[who].length < 40) invPk[who].push(`${n.replace('inventory_', '')}:${d.window_id ?? ''}:${d.slot ?? (d.input ? d.input.length : '')}${d.container ? `:${d.container.container_id}` : ''}`);
+      });
+    }
     const H = await import('../src/bedrock/handsActions.js');
     const step = async (name, fn) => {
       try { J[name] = String(await fn()); } catch (e) { J[name] = `ОШИБКА: ${e.message}`; }
@@ -268,6 +276,8 @@ try {
     await step('smelt', () => H.smeltItem(pal, 'cobblestone', 1));
     J.stone = alex.inventory.count('stone');
     log('как в Java:', JSON.stringify(J));
+    log('пакеты инвентаря Alex:', invPk.Alex.join(' '));
+    log('пакеты инвентаря Steve:', invPk.Steve.join(' '));
   }
   alex.quit(); steve.quit();
 } catch (e) {
