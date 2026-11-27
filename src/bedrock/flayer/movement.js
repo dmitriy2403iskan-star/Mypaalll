@@ -163,7 +163,12 @@ export class Movement {
     this.timer = setInterval(() => this.onTick(), 50);
   }
 
-  stop() { clearInterval(this.timer); this.timer = null; }
+  stop() {
+    clearInterval(this.timer); this.timer = null;
+    // соединения нет — ожидающие goto() не должны висеть вечно
+    const g = this.goal; this.goal = null;
+    g?.reject?.(new Error('Нет соединения с сервером'));
+  }
 
   get position() { return this.fake.entity.position; }
 
@@ -187,6 +192,7 @@ export class Movement {
   /** Дойти до точки: Promise, который завершается по прибытии или с ошибкой. */
   goto(target, range = 1.5, timeoutMs = 60000) {
     return new Promise((resolve, reject) => {
+      if (this.body.ended) { reject(new Error('Нет соединения с сервером')); return; }
       const started = Date.now();
       this.setGoal({ ...target, range, resolve, reject, started, timeoutMs });
     });
