@@ -25,6 +25,18 @@ export class Inventory {
     c.on('inventory_content', (p) => { if (isInv(p.window_id)) (p.input || []).forEach((it, i) => { if (i < 36) this.slots[i] = it; }); });
     c.on('inventory_slot', (p) => { if (isInv(p.window_id) && p.slot < 36) this.slots[p.slot] = p.item; });
     c.on('mob_equipment', (p) => { if (String(p.runtime_entity_id) === String(body.runtimeId)) this.selected = p.selected_slot ?? p.slot ?? this.selected; });
+    // предметы, лежащие на земле (дроп после ломания) — чтобы подойти и подобрать
+    this.drops = new Map();
+    c.on('add_item_entity', (p) => this.drops.set(String(p.runtime_entity_id), { name: this.nameOf(p.item), position: p.position, at: Date.now() }));
+    c.on('remove_entity', (p) => { for (const k of this.drops.keys()) if (k === String(p.entity_id_self) || k === String(p.runtime_entity_id)) this.drops.delete(k); });
+    c.on('take_item_entity', (p) => this.drops.delete(String(p.runtime_entity_id)));
+    c.on('move_entity', (p) => { const d = this.drops.get(String(p.runtime_entity_id)); if (d) d.position = p.position; });
+  }
+
+  /** Ближайшие лежащие предметы. */
+  nearbyDrops(pos, radius = 8) {
+    return [...this.drops.values()].filter((d) => d.position && Math.hypot(d.position.x - pos.x, d.position.z - pos.z) <= radius)
+      .sort((a, b) => Math.hypot(a.position.x - pos.x, a.position.z - pos.z) - Math.hypot(b.position.x - pos.x, b.position.z - pos.z));
   }
 
   nameOf(item) {

@@ -134,9 +134,12 @@ try {
     try { results.hands.dug = await alex.dig(spot); } catch (e) { results.hands.digError = e.message; }
     await sleep(500);
     results.hands.afterDig = alex.blockAt(spot.x, spot.y, spot.z)?.name;
-    // подобрать дроп: подойти к месту
-    try { await alex.goto({ x: spot.x + 0.5, y: spot.y, z: spot.z + 0.5 }, 0.6, 8000); } catch { /* */ }
-    await sleep(1500);
+    // подобрать дроп: как в действии collect_blocks
+    results.hands.dropsSeen = alex.inventory.nearbyDrops(spot, 6).map((d) => d.name);
+    const { pickupDrops } = await import('../src/bedrock/handsActions.js');
+    await pickupDrops({ bot: alex, interrupted: false }, spot);
+    await sleep(1000);
+    results.hands.dropsLeft = alex.inventory.nearbyDrops(spot, 6).length;
     results.hands.dirtAfter = alex.inventory.count('dirt');
     log('руки:', JSON.stringify(results.hands));
   }

@@ -58,13 +58,24 @@ export async function collectBlocks(pal, blockName, count) {
       const ok = await body.dig(target);
       if (!ok) { lastError = 'сервер не подтвердил ломание'; continue; }
       mined++;
-      // подобрать дроп: шагнуть на место блока
-      await body.goto({ x: target.x + 0.5, y: target.y, z: target.z + 0.5 }, 0.7, 6000).catch(() => {});
-      await sleep(400);
+      await pickupDrops(pal, target);
     } catch (e) { lastError = e.message; if (pal.interrupted) break; }
   }
   if (!mined) throw new ActionError(`Не удалось добыть ${blockName}: ${lastError}`);
   return `Добыл ${mined}/${count} ${blockName} руками.${lastError ? ` Проблема: ${lastError}.` : ''} Инвентарь: ${fmt(body.inventory.summary())}`;
+}
+
+/** Подобрать выпавшие предметы рядом (подойти вплотную — сервер сам кладёт их в инвентарь). */
+export async function pickupDrops(pal, near) {
+  const body = pal.bot;
+  await sleep(600); // предмет появляется не сразу и подбирается после короткой задержки
+  for (let i = 0; i < 4 && !pal.interrupted; i++) {
+    const drop = body.inventory.nearbyDrops(near, 6)[0];
+    const to = drop ? drop.position : { x: near.x + 0.5, y: near.y, z: near.z + 0.5 };
+    await body.goto({ x: to.x, y: to.y, z: to.z }, 0.4, 5000).catch(() => {});
+    await sleep(500);
+    if (!body.inventory.nearbyDrops(near, 6).length) break;
+  }
 }
 
 export async function placeOne(pal, item, pos) {
