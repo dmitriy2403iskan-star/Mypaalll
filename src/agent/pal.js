@@ -183,7 +183,7 @@ export class Pal extends EventEmitter {
     this.interrupted = true;
     this.mode = null;
     if (!this.bot) return;
-    if (this.edition === 'bedrock') { this.emit('status'); return; }
+    if (this.edition === 'bedrock') { try { this.bot.stopMoving?.(); } catch { /* */ } this.emit('status'); return; }
     try { this.bot.pathfinder.stop(); this.bot.pathfinder.setGoal(null); } catch { /* */ }
     try { this.bot.pvp.stop(); } catch { /* */ }
     try { this.bot.collectBlock.cancelTask(); } catch { /* */ }

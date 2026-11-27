@@ -87,15 +87,64 @@ const BUILD_POS = {
 
 const BLOCKED = /^\/?(op|deop|stop|kick|ban|ban-ip|pardon|whitelist|allowlist|permission|reload|save|transfer|setmaxplayers|changesetting)\b/i;
 
+/** Своё тело (ходьба без команд) готово? */
+const canWalk = (pal) => Boolean(pal.bot?.nativeReady && pal.bot?.movement && pal.settings?.().minecraft?.bedrock?.nativeMovement !== false);
+
+/** Дойти ногами; если пути нет или далеко/долго — телепорт командой (если разрешён). */
+async function walkOrTp(pal, target, range, tpCommand, label) {
+  if (canWalk(pal)) {
+    const me = pal.bot.movement.position;
+    const far = Math.hypot(target.x - me.x, target.z - me.z) > 96;
+    if (!far) {
+      try {
+        await pal.bot.goto(target, range, 60000);
+        return `Дошёл ${label}.`;
+      } catch (e) {
+        if (pal.interrupted) throw new ActionError('Прервано');
+        if (!tpCommand) throw new ActionError(`Не могу дойти: ${e.message}`);
+        const r = await pal.bot.command(tpCommand);
+        if (!r.success) throw new ActionError(`Пешком не дошёл (${e.message}), а телепорт не сработал: ${r.output}`);
+        return `Пешком пути не нашёл (${e.message}) — переместился командой ${label}.`;
+      }
+    }
+  }
+  if (!tpCommand) throw new ActionError('Мир ещё не загружен');
+  const r = await pal.bot.command(tpCommand);
+  if (!r.success) throw new ActionError(`Не получилось: ${r.output}. Нужны читы/оператор.`);
+  return `Переместился ${label}.`;
+}
+
 export default [
   {
     name: 'go_to_player',
-    description: 'Переместиться к игроку (телепорт командой).',
+    description: 'Подойти к игроку (пешком; если пути нет — телепорт командой).',
     parameters: { type: 'object', properties: { player: { type: 'string' } }, required: ['player'] },
     async run(pal, { player }) {
-      const r = await pal.bot.command(execAt(pal.bot.version, player, 'tp @s ^1 ^ ^-1', pal.bot.username));
-      if (!r.success) throw new ActionError(`Не получилось: ${r.output}. Нужны читы/оператор, и игрок должен быть онлайн.`);
-      return `Я рядом с ${player}.`;
+      const target = pal.bot.findPlayer(player)?.position;
+      if (!target && !canWalk(pal)) { /* позиция неизвестна — только телепорт */ }
+      const tp = execAt(pal.bot.version, player, 'tp @s ^1 ^ ^-1', pal.bot.username);
+      if (!target) {
+        const r = await pal.bot.command(tp);
+        if (!r.success) throw new ActionError(`Не вижу ${player}: ${r.output}`);
+        return `Переместился к ${player}.`;
+      }
+      return walkOrTp(pal, target, 2, tp, `до ${player}`);
+    },
+  },
+  {
+    name: 'explore',
+    description: 'Пройтись и осмотреться в случайном или заданном направлении (пешком).',
+    parameters: { type: 'object', properties: { distance: { type: 'number' }, direction: { type: 'string', enum: ['north', 'south', 'east', 'west', 'random'] } } },
+    async run(pal, { distance = 30, direction = 'random' }) {
+      if (!canWalk(pal)) throw new ActionError('Мир ещё не загружен — подожди пару секунд.');
+      const dirs = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
+      let [dx, dz] = dirs[direction] || [];
+      if (dx === undefined) { const a = Math.random() * Math.PI * 2; dx = Math.cos(a); dz = Math.sin(a); }
+      const p = pal.bot.movement.position;
+      const target = { x: p.x + dx * Math.min(distance, 60), y: p.y, z: p.z + dz * Math.min(distance, 60) };
+      await pal.bot.goto(target, 3, 90000).catch((e) => { throw new ActionError(`Дальше пройти не смог: ${e.message}`); });
+      const q2 = pal.bot.movement.position;
+      return `Прошёл, сейчас в ${Math.round(q2.x)} ${Math.round(q2.y)} ${Math.round(q2.z)}.`;
     },
   },
   {
@@ -130,16 +179,15 @@ export default [
     name: 'stop',
     description: 'Остановить фоновые режимы (следование, охрана).',
     parameters: { type: 'object', properties: {} },
-    async run(pal) { pal.stopAll(); return 'Остановился.'; },
+    async run(pal) { pal.stopAll(); pal.bot.stopMoving?.(); return 'Остановился.'; },
   },
   {
     name: 'go_to_coords',
     description: 'Переместиться к координатам.',
     parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } }, required: ['x', 'z'] },
     async run(pal, { x, y, z }) {
-      const r = await pal.bot.command(`tp @s ${x} ${y ?? '~'} ${z}`);
-      if (!r.success) throw new ActionError(r.output);
-      return `Я в ${x} ${y ?? '~'} ${z}.`;
+      const ty = y ?? pal.bot.entity?.position?.y ?? 64;
+      return walkOrTp(pal, { x, y: ty, z }, 1.5, `tp @s ${x} ${y ?? '~'} ${z}`, `до ${x} ${Math.round(ty)} ${z}`);
     },
   },
   {
@@ -161,9 +209,7 @@ export default [
     async run(pal, { name }) {
       const loc = pal.memory.getLocation(name);
       if (!loc) throw new ActionError(`Не знаю места "${name}". Известные: ${pal.memory.locations().map((l) => l.name).join(', ') || 'нет'}`);
-      const r = await pal.bot.command(`tp @s ${loc.x} ${loc.y} ${loc.z}`);
-      if (!r.success) throw new ActionError(r.output);
-      return `Я в "${name}".`;
+      return walkOrTp(pal, { x: loc.x, y: loc.y, z: loc.z }, 2, `tp @s ${loc.x} ${loc.y} ${loc.z}`, `в «${name}»`);
     },
   },
   {
@@ -244,6 +290,17 @@ export function startBedrockModes(pal) {
     if (!mode || busy || !body || body.ended) return;
     busy = true;
     try {
+      // своё тело: следуем пешком; телепорт — только если игрок очень далеко (другой берег, телепорт игрока)
+      if (body.nativeReady && body.movement && pal.settings?.().minecraft?.bedrock?.nativeMovement !== false) {
+        if (!body.movement.follow || body.movement.follow.player !== mode.player) body.followPlayer(mode.player, mode.distance || 2.5);
+        const target = body.findPlayer(mode.player);
+        const me = body.movement.position;
+        if (target?.position && Math.hypot(target.position.x - me.x, target.position.z - me.z) > 48) {
+          await body.command(execAt(body.version, mode.player, `tp @s ^1 ^ ^-${mode.distance || 2}`, body.username), 2500);
+        }
+        if (mode.type === 'guard') await body.command(execAt(body.version, mode.player, 'kill @e[family=monster,r=12]'), 2500);
+        return;
+      }
       const target = body.findPlayer(mode.player);
       const me = body.entity?.position;
       const far = !target?.position || !me || Math.hypot(target.position.x - me.x, target.position.z - me.z) > (mode.distance || 3) + 2;

@@ -24,7 +24,12 @@ export function buildContext(pal, message = '') {
 
   lines.push(`# Состояние (${new Date().toLocaleTimeString('ru-RU')})`);
   lines.push(`Позиция: ${s.position.x} ${s.position.y} ${s.position.z} | ${s.dimension}${s.biome ? `, биом ${s.biome}` : ''} | ${s.time}${s.isRaining ? ', дождь' : ''}`);
-  if (s.edition === 'bedrock') lines.push('Мир: Minecraft Bedrock. Ты действуешь командами (телепорт, /fill, /setblock, /give). Добывать блоки руками и крафтить в этом режиме ты не можешь — честно говори об этом.');
+  if (s.edition === 'bedrock') {
+    const walks = pal.bot?.nativeReady && pal.bot?.movement;
+    lines.push(walks
+      ? 'Мир: Minecraft Bedrock. Ходишь сам (своё тело: ходьба, прыжки, обход препятствий). Строишь и выдаёшь предметы командами (/fill, /setblock, /give). Копать руками и крафтить в Bedrock пока не умеешь — честно говори об этом.'
+      : 'Мир: Minecraft Bedrock. Ты действуешь командами (телепорт, /fill, /setblock, /give). Добывать блоки руками и крафтить в этом режиме ты не можешь — честно говори об этом.');
+  }
   lines.push(`Здоровье ${s.health}/20, сытость ${s.food}/20, в руке: ${s.heldItem || 'ничего'}, режим игры: ${s.gameMode}`);
   if (pal.mode) lines.push(`Фоновый режим: ${pal.mode.type} → ${pal.mode.player}`);
   lines.push(`\n# ${modePrompt(pal.gameMode, s.edition === 'bedrock' ? 'bedrock' : 'java')}\n`);

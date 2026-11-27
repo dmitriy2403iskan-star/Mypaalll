@@ -40,6 +40,7 @@ function defaults() {
         realm: env('BEDROCK_REALM', ''),     // имя Realm (тогда host/port не нужны)
         version: env('BEDROCK_VERSION', ''), // пусто = автоопределение
         transport: 'raknet',                 // raknet | nethernet (новые LAN-миры)
+        nativeMovement: true,                // своё «тело»: ходьба без команд (false — только телепорт командами)
       },
       host: env('MC_HOST', 'localhost'),
       port: Number(env('MC_PORT', '25565')),
