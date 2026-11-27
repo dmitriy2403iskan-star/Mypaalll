@@ -34,10 +34,19 @@ export default [
       if (!have) throw new ActionError(`Нет ${item} в инвентаре.`);
       const target = findPlayer(bot, player);
       if (!target) throw new ActionError(`Не вижу ${player}.`);
-      await gotoPos(pal, target.position, 2, 60_000);
-      await bot.lookAt(target.position.offset(0, 1.6, 0));
+      await gotoPos(pal, target.position, 2.5, 60_000);
+      await bot.lookAt(target.position.offset(0, 1.0, 0));
       const n = Math.min(count, have);
-      await bot.toss(itemByName(bot, item).id, null, n);
+      const id = itemByName(bot, item).id;
+      try { await bot.toss(id, null, n); } catch {
+        // сервер иногда отклоняет клик по слоту (рассинхрон окна) — повторяем один раз
+        await sleep(500);
+        await bot.toss(id, null, Math.min(n, countItem(bot, item)));
+      }
+      // отойти назад, чтобы не подобрать брошенное самому (задержка подбора 2 с)
+      const me = bot.entity.position; const away = me.minus(target.position);
+      const len = Math.hypot(away.x, away.z) || 1;
+      await gotoPos(pal, me.offset((away.x / len) * 3, 0, (away.z / len) * 3), 1, 5000).catch(() => {});
       return `Отдал ${n} ${item} игроку ${player}.`;
     },
   },
@@ -77,6 +86,7 @@ export default [
       if (pal.bot.food >= 20) return 'Я сыт.';
       const ate = await eatBest(pal.bot);
       if (!ate) throw new ActionError('Нет еды в инвентаре.');
+      await sleep(400); // сытость сервер присылает чуть позже
       return `Съел ${ate}. Сытость: ${pal.bot.food}/20.`;
     },
   },

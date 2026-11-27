@@ -65,7 +65,24 @@ export default [
       // ограничиваем количеством, на которое хватает ресурсов
       while (times > 0 && !bot.recipesFor(it.id, null, times * per, table).length) times--;
       if (times <= 0) throw new ActionError(`Не хватает материалов для ${item}: ${describeMissing(bot, it)}.`);
-      await bot.craft(recipe, times, table);
+      // по одному крафту: на новых версиях Mineflayer зависает на пакетном крафте (updateSlot:0 timeout)
+      let done = 0; let lastErr = null;
+      for (let k = 0; k < times && !pal.interrupted; k++) {
+        const r1 = bot.recipesFor(it.id, null, 1, table)[0];
+        if (!r1) break;
+        try {
+          await bot.craft(r1, 1, table);
+          done++; lastErr = null;
+        } catch (e) {
+          lastErr = e;
+          // окно могло зависнуть — закрываем и пробуем этот крафт ещё раз
+          try { if (bot.currentWindow) bot.closeWindow(bot.currentWindow); } catch { /* */ }
+          await sleep(400);
+          try { const r2 = bot.recipesFor(it.id, null, 1, table)[0]; if (r2) { await bot.craft(r2, 1, table); done++; lastErr = null; } } catch (e2) { lastErr = e2; break; }
+        }
+        await sleep(120);
+      }
+      if (!done && lastErr) throw new ActionError(`Крафт ${item} не удался: ${lastErr.message}`);
       await sleep(200);
       const made = countItem(bot, item) - before;
       return `Скрафтил ${made} ${item}${made < count ? ` (на ${count} не хватило материалов)` : ''}. Теперь в инвентаре: ${countItem(bot, item)}.`;

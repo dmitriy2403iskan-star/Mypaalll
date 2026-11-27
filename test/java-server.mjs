@@ -112,10 +112,15 @@ try {
   alex.chat('Привет с Java!');
   results.chatReceived = await heard;
 
-  // ходьба: Steve отходит на 10 блоков, бот идёт к нему пешком
+  // площадка в воздухе (y=100): тест не зависит от рельефа; на ней несколько блоков земли для добычи
   await consoleCmd('time set day');
-  await consoleCmd('tp Steve Alex', 800);
-  await consoleCmd('execute as Steve at @s run tp @s ~10 ~ ~', 1500);
+  const s0 = alex.entity.position.floored(); const X = s0.x; const Z = s0.z;
+  await consoleCmd(`fill ${X - 8} 99 ${Z - 8} ${X + 16} 99 ${Z + 8} stone`);
+  await consoleCmd(`fill ${X - 8} 100 ${Z - 8} ${X + 16} 105 ${Z + 8} air`);
+  for (const [dx, dz] of [[4, -4], [5, -4], [6, -4]]) await consoleCmd(`setblock ${X + dx} 100 ${Z + dz} dirt`, 150);
+  await consoleCmd(`tp Alex ${X} 100 ${Z}`);
+  await consoleCmd(`tp Steve ${X + 10} 100 ${Z}`, 2500);
+  // ходьба: бот идёт к Steve пешком
   const from = alex.entity.position.clone();
   await act('go_to_player', { player: 'Steve' });
   results.walked = Math.round(alex.entity.position.distanceTo(from) * 10) / 10;
@@ -126,8 +131,11 @@ try {
   await act('collect_blocks', { block: 'dirt', count: 2 });
   J.dirtGot = count(alex, 'dirt') - dirt0;
   const p = alex.entity.position.floored();
-  await act('place_block', { block: 'dirt', x: p.x + 2, y: p.y, z: p.z + 1 });
-  J.placedBlock = alex.blockAt(p.offset(2, 0, 1))?.name;
+  const spot = [[2, 1], [-2, 1], [2, -2], [-2, -2], [1, 3]].map(([dx, dz]) => p.offset(dx, 0, dz))
+    .find((c) => alex.blockAt(c)?.name === 'air' && alex.blockAt(c.offset(0, -1, 0))?.boundingBox === 'block'
+      && steve.entity.position.distanceTo(c.offset(0.5, 0, 0.5)) > 1.5) || p.offset(2, 0, 1);
+  await act('place_block', { block: 'dirt', x: spot.x, y: spot.y, z: spot.z });
+  J.placedBlock = alex.blockAt(spot)?.name;
 
   // крафт: доски (2x2), палки, верстак, кирка (3x3 — верстак бот поставит сам)
   await consoleCmd('give Alex oak_log 3', 1000);
@@ -146,6 +154,7 @@ try {
   await consoleCmd('effect clear Alex', 600);
   J.foodBefore = alex.food;
   await act('eat', {});
+  await sleep(800);
   J.foodAfter = alex.food;
 
   await act('equip', { item: 'iron_helmet' });
