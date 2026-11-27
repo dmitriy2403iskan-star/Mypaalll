@@ -107,6 +107,7 @@ export class Pal extends EventEmitter {
       const b = mc.bedrock || {};
       this.log('system', b.realm ? `Подключаюсь к Realm «${b.realm}» (Bedrock)...` : `Подключаюсь к Bedrock ${b.host || mc.host}:${b.port || 19132}...`);
       bot = new BedrockBody({ username: this.profile.name, host: b.host || mc.host, port: b.port || 19132, auth: b.auth || 'offline', version: b.version || undefined, realm: b.realm || undefined, transport: b.transport });
+      bot.on('netlog', (text) => this.log('system', `Сеть: ${text}`));
       // вход Microsoft: показываем код в панели
       bot.on('msaCode', (d) => this.log('auth', `Вход в Microsoft для бота: открой ${d.verification_uri} и введи код ${d.user_code}`, { auth: d }));
     } else {

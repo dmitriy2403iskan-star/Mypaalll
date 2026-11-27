@@ -54,7 +54,12 @@ export class BedrockBody extends EventEmitter {
       profilesFolder: path.join(DATA_DIR, 'auth'),
       // вход через Microsoft: код и ссылка показываются в панели и в консоли
       onMsaCode: (data) => this.emit('msaCode', data),
-      conLog: () => {},
+      // ход поиска мира и подключения — в журнал панели (иначе причину тайм-аута не видно)
+      conLog: (...args) => this.emit('netlog', args.join(' ')),
+      // телефону нужно больше времени, особенно когда игра в плавающем окне:
+      // поиск мира (по умолчанию библиотека ждёт 1 с) и само соединение (по умолчанию 9 с)
+      pingTimeout: 10_000,
+      connectTimeout: 30_000,
       // RakNet в основном потоке: в worker-потоке не действует заплатка протокола (см. protocol.js),
       // и на телефоне лишний поток только тратит память
       useRaknetWorkers: false,
