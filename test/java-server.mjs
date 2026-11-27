@@ -163,7 +163,8 @@ try {
   // отдать игроку
   const sb0 = count(steve, 'bread');
   await act('give_items', { player: 'Steve', item: 'bread', count: 2 });
-  for (let k = 0; k < 12 && count(steve, 'bread') <= sb0; k++) await sleep(500);
+  for (let k = 0; k < 16 && count(steve, 'bread') <= sb0; k++) await sleep(500);
+  J.breadOnGround = Object.values(alex.entities).filter((e) => e.name === 'item').length;
   J.steveGotBread = count(steve, 'bread') - sb0;
 
   // сундук рядом

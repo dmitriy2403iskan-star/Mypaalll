@@ -114,7 +114,7 @@ export default [
       await gotoPos(pal, furnaceBlock.position, 3);
       const fuelName = fuel || ['coal', 'charcoal', 'oak_planks', 'spruce_planks', 'birch_planks', 'oak_log'].find((f) => countItem(bot, f) > 0);
       if (!fuelName || !countItem(bot, fuelName)) throw new ActionError('Нет топлива (coal, charcoal, доски).');
-      const furnace = await bot.openFurnace(furnaceBlock);
+      let furnace = await bot.openFurnace(furnaceBlock);
       try {
         const fuelNeeded = Math.min(countItem(bot, fuelName), fuelName.includes('coal') ? Math.ceil(count / 8) : Math.ceil(count / 1.5));
         if (!furnace.fuelItem()) await furnace.putFuel(bot.registry.itemsByName[fuelName].id, null, fuelNeeded);
@@ -123,6 +123,13 @@ export default [
         let got = 0;
         while (got < count && Date.now() < deadline && !pal.interrupted) {
           await sleep(2000);
+          if (furnace.outputItem()) { got += furnace.outputItem().count; await furnace.takeOutput(); }
+        }
+        // окно могло не получить обновление выхода (бывает на 1.19) — переоткрываем печь, как игрок
+        if (!got && !pal.interrupted) {
+          furnace.close(); await sleep(300);
+          furnace = await bot.openFurnace(furnaceBlock);
+          await sleep(500);
           if (furnace.outputItem()) { got += furnace.outputItem().count; await furnace.takeOutput(); }
         }
         return got ? `Переплавил ${got} ${item}.` : 'Плавка не завершилась вовремя — результат останется в печке.';
