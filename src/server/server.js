@@ -77,6 +77,7 @@ export function startServer({ port = 3000, host = '127.0.0.1' } = {}) {
   app.post('/api/pals/:id/action', wrap(async (req) => {
     const pal = palOf(req);
     if (!pal.bot) throw new Error('Pal не подключён');
+    pal.interrupted = false; // ручной запуск действия — новое задание, старое «стоп» к нему не относится
     return runAction(pal, req.body.name, req.body.args || {});
   }));
 

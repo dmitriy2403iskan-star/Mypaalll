@@ -57,6 +57,16 @@ export default [
     },
   },
   {
+    name: 'get_item',
+    description: 'КРЕАТИВ: взять любой предмет из инвентаря креатива в нужном количестве (блоки для стройки, инструменты, еда, броня…). В выживании недоступно.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number' } }, required: ['item'] },
+    async run(pal, { item, count = 1 }) {
+      const { ensureItem } = await import('./util.js');
+      const n = await ensureItem(pal, String(item).replace(/^minecraft:/, ''), Math.min(Math.max(1, count), 64 * 9));
+      return `Взял ${item}: теперь в инвентаре ${n}.`;
+    },
+  },
+  {
     name: 'create_plan',
     description: 'Создать план для сложной многошаговой задачи (построить дом, сделать железную кирку...). Шаги — короткие конкретные действия. Используй ДО выполнения сложных задач, затем отмечай шаги через update_plan_step.',
     parameters: {

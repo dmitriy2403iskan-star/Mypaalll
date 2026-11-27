@@ -17,7 +17,7 @@ async function run(pal, plan, args, title) {
   if (args.dry_run) {
     const a = analyze(bot, origin, plan.ops);
     return `${title}: ${plan.summary}. Угол ${origin}, размер ${plan.size.w}x${plan.size.l}, высота ~${plan.size.h}.
-Нужно материалов: ${fmt(a.bill)}. ${Object.keys(a.missing).length ? `Не хватает: ${fmt(a.missing)}.` : 'Всего хватает.'}
+Нужно материалов: ${fmt(a.bill)}. ${bot.game?.gameMode === 'creative' ? 'Креатив: материалы возьму из инвентаря креатива, собирать ничего не нужно.' : Object.keys(a.missing).length ? `Не хватает: ${fmt(a.missing)}.` : 'Всего хватает.'}
 Копать блоков: ${a.digs}.`;
   }
   const r = await execute(pal, origin, plan.ops, { allowPartial: args.allow_partial });

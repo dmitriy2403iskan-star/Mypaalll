@@ -18,6 +18,7 @@ import { BedrockBody } from '../bedrock/body.js';
 import { startBedrockModes } from '../bedrock/actions.js';
 import minecraftData from 'minecraft-data';
 import { checkVersion, supportedVersions } from '../versions.js';
+import { modeProfile, normalizeMode } from './modes.js';
 
 const STOP_WORDS = /^(стоп|stop|хватит|остановись|замри|halt)[!. ]*$/i;
 const MAX_AUTO_CONTINUE = 6;
@@ -53,6 +54,27 @@ export class Pal extends EventEmitter {
     const reg = this.bot.registry || (this._bedrockReg ||= minecraftData(minecraftData.supportedVersions.pc.at(-1)));
     if (!this._recipes || this._recipes.reg !== reg) this._recipes = new RecipeDB(reg);
     return this._recipes;
+  }
+
+  /** Текущий игровой режим бота: survival | creative | adventure | spectator. */
+  get gameMode() {
+    if (!this.bot) return 'survival';
+    return normalizeMode(this.edition === 'bedrock' ? this.bot.gameMode : this.bot.game?.gameMode);
+  }
+
+  /** Режим сменился (например, /gamemode creative) — подстраиваем поведение и говорим об этом. */
+  onGameModeChange() {
+    const mode = this.gameMode;
+    if (mode === this.lastMode) return;
+    const first = this.lastMode === undefined;
+    this.lastMode = mode;
+    const p = modeProfile(mode);
+    this.log('system', `Режим игры: ${p.title}`);
+    if (!first) {
+      this.stopAll();
+      this.say(p.say);
+    }
+    this.emit('status');
   }
 
   snapshot() {
@@ -105,9 +127,12 @@ export class Pal extends EventEmitter {
         const warn = checkVersion('java', bot.version);
         if (warn) this.log('error', warn);
       }
+      this.lastMode = undefined;
+      this.onGameModeChange();
       this.emit('status');
-      if (this.profile.owner) setTimeout(() => this.say(`Привет, ${this.profile.owner}! Я тут.`), 1500);
+      if (this.profile.owner) setTimeout(() => this.say(`Привет, ${this.profile.owner}! Я тут (${modeProfile(this.gameMode).title}).`), 1500);
     });
+    bot.on('game', () => { if (this.status === 'online') this.onGameModeChange(); });
     bot.on('chat', (username, message) => this.onChat(username, message, false));
     bot.on('whisper', (username, message) => this.onChat(username, message, true));
     bot.on('death', () => { this.log('system', 'Я погиб...'); this.memory.add('episodic', `Погиб в ${JSON.stringify(this.snapshot()?.position)}`, 2); this.stopAll(); });
@@ -345,6 +370,7 @@ export class Pal extends EventEmitter {
       mode: this.mode,
       currentAction: this.currentAction,
       edition: this.edition,
+      gameMode: this.gameMode,
       leftDueToLimit: Boolean(this.leftDueToLimit),
       world: this.snapshot(),
       task: this.tasks.current(),

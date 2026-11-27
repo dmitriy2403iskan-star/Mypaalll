@@ -1,4 +1,4 @@
-import { ActionError, countItem, findPlayer, gotoPos, itemByName, goals, sleep } from './util.js';
+import { ActionError, countItem, findPlayer, gotoPos, itemByName, goals, sleep, ensureItem } from './util.js';
 import { findBlocks, isHostile } from '../minecraft/world.js';
 
 const FOOD_PRIORITY = ['golden_carrot', 'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_salmon', 'cooked_chicken', 'cooked_cod',
@@ -29,6 +29,7 @@ export default [
     },
     async run(pal, { player, item, count = 1 }) {
       const { bot } = pal;
+      await ensureItem(pal, item, count); // в креативе — берём из инвентаря креатива
       const have = countItem(bot, item);
       if (!have) throw new ActionError(`Нет ${item} в инвентаре.`);
       const target = findPlayer(bot, player);
@@ -60,6 +61,7 @@ export default [
       required: ['item'],
     },
     async run(pal, { item, slot }) {
+      await ensureItem(pal, item, 1);
       const it = pal.bot.inventory.items().find((i) => i.name === item);
       if (!it) throw new ActionError(`Нет ${item}.`);
       const auto = /helmet/.test(item) ? 'head' : /chestplate|elytra/.test(item) ? 'torso' : /leggings/.test(item) ? 'legs' : /boots/.test(item) ? 'feet' : item === 'shield' ? 'off-hand' : 'hand';

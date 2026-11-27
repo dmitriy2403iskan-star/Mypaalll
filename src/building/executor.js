@@ -1,5 +1,5 @@
 // Исполнитель чертежей: проверяет материалы → копает → ставит снизу вверх. Возвращает подробный отчёт.
-import { ActionError, countItem, placeAt, gotoPos, Vec3, isAir } from '../actions/util.js';
+import { ActionError, countItem, placeAt, gotoPos, Vec3, isAir, isCreative, ensureItem } from '../actions/util.js';
 import { billOfMaterials } from './blueprints.js';
 
 const SOFT = new Set(['short_grass', 'grass', 'tall_grass', 'fern', 'large_fern', 'snow', 'dead_bush', 'water', 'dandelion', 'poppy', 'vine']);
@@ -38,6 +38,7 @@ function absolute(origin, ops) {
 
 /** Что нужно сделать (без учёта уже стоящих правильных блоков) и чего не хватает. */
 export function analyze(bot, origin, ops) {
+  const creative = isCreative(bot);
   const abs = absolute(origin, ops);
   const todo = abs.filter((op) => {
     const b = bot.blockAt(op.pos);
@@ -46,9 +47,12 @@ export function analyze(bot, origin, ops) {
   });
   const bill = billOfMaterials(todo.filter((o) => o.block));
   const missing = {};
-  for (const [item, n] of Object.entries(bill)) {
-    const have = countItem(bot, item);
-    if (have < n) missing[item] = n - have;
+  // в креативе материалы бесконечны — ничего не «не хватает»
+  if (!creative) {
+    for (const [item, n] of Object.entries(bill)) {
+      const have = countItem(bot, item);
+      if (have < n) missing[item] = n - have;
+    }
   }
   return { todo, bill, missing, digs: todo.filter((o) => o.dig || (o.replace && !isFree(bot.blockAt(o.pos)))).length };
 }
@@ -111,6 +115,7 @@ async function buildCycle(pal, todo) {
       if (pal.interrupted) break;
       const cur = bot.blockAt(op.pos);
       if (cur?.name === op.block) continue;
+      if (isCreative(bot)) await ensureItem(pal, op.block, 1).catch(() => {});
       if (!countItem(bot, op.block)) { if (!op.optional) skipped.push(`${op.block} (нет в инвентаре)`); continue; }
       try {
         if (await placeAt(pal, op.block, op.pos, { attach: op.attach })) placed++;

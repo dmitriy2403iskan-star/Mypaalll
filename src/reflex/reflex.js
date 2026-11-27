@@ -5,6 +5,7 @@ import { settings } from '../config.js';
 import { isHostile } from '../minecraft/world.js';
 import { eatBest } from '../actions/interaction.js';
 import { findPlayer } from '../actions/util.js';
+import { modeProfile } from '../agent/modes.js';
 
 const { goals } = pathfinderPkg;
 
@@ -40,6 +41,9 @@ export class ReflexEngine {
     if (!bot.entity || bot.health === undefined) return;
     const cfg = this.cfg();
     const me = bot.entity.position;
+    // в креативе/наблюдателе нет урона и голода: есть и убегать не нужно, драться — только в режиме охраны
+    const mp = modeProfile(bot.game?.gameMode).reflex;
+    const guarding = this.pal.mode?.type === 'guard';
 
     // 1. Не утонуть
     if (cfg.avoidDrowning && bot.oxygenLevel !== undefined && bot.oxygenLevel < 12 && bot.entity.isInWater) {
@@ -49,9 +53,10 @@ export class ReflexEngine {
 
     // 2. Бегство: мало здоровья или рядом крипер
     if (Date.now() < this.fleeingUntil) return;
+    if (!mp.flee && !mp.defend && !mp.eat && !guarding) return;
     const hostile = this.nearestHostile(me, 16);
     const creeperClose = hostile?.name === 'creeper' && hostile.position.distanceTo(me) < 5;
-    if (hostile && (creeperClose || (bot.health <= cfg.fleeHealth && hostile.position.distanceTo(me) < 10))) {
+    if (mp.flee && hostile && (creeperClose || (bot.health <= cfg.fleeHealth && hostile.position.distanceTo(me) < 10))) {
       this.pal.log('reflex', creeperClose ? 'Крипер рядом — отбегаю!' : `Мало здоровья (${Math.round(bot.health)}) — отступаю`);
       bot.pvp.stop();
       this.fighting = null;
@@ -62,7 +67,7 @@ export class ReflexEngine {
     }
 
     // 3. Самооборона / охрана
-    if (cfg.selfDefense && !this.fighting) {
+    if (cfg.selfDefense && !this.fighting && (mp.defend || guarding) && bot.game?.gameMode !== 'spectator') {
       const mode = this.pal.mode;
       const guardTarget = mode?.type === 'guard' ? findPlayer(bot, mode.player) : null;
       const center = guardTarget?.position || me;
@@ -80,7 +85,7 @@ export class ReflexEngine {
     }
 
     // 4. Еда
-    if (cfg.autoEat && !this.eating && !this.fighting && bot.food <= 14) {
+    if (mp.eat && cfg.autoEat && !this.eating && !this.fighting && bot.food <= 14) {
       this.eating = true;
       try {
         const ate = await eatBest(bot);

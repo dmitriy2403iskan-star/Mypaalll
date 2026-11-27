@@ -179,3 +179,28 @@ test('Bedrock: старые версии — data-значения и стары
   assert.equal(execAt('1.16.201', 'Steve', 'tp @s ~ ~ ~'), 'execute "Steve" ~ ~ ~ tp @s ~ ~ ~');
   assert.equal(execAt('1.26.60', 'Steve', 'tp @s ~ ~ ~'), 'execute at "Steve" run tp @s ~ ~ ~');
 });
+
+test('Режимы игры: инструменты и правила зависят от выживания/креатива', async () => {
+  const { actionAllowed, modePrompt, normalizeMode, modeProfile } = await import('../src/agent/modes.js');
+  const { toolSchemas } = await import('../src/actions/index.js');
+  const names = (mode, edition = 'java') => toolSchemas({ gameMode: mode, edition }).map((t) => t.name);
+  // выживание: добыча и крафт есть, get_item нет
+  assert.ok(names('survival').includes('collect_blocks') && names('survival').includes('craft_item'));
+  assert.ok(!names('survival').includes('get_item'));
+  // креатив: наоборот
+  assert.ok(names('creative').includes('get_item') && names('creative').includes('build_house'));
+  assert.ok(!names('creative').includes('collect_blocks') && !names('creative').includes('eat'));
+  // приключение: нельзя строить; наблюдатель: только движение и разговор
+  assert.ok(!names('adventure').includes('build_house') && names('adventure').includes('attack'));
+  assert.ok(!names('spectator').includes('attack') && names('spectator').includes('follow_player'));
+  // Bedrock: в приключении стройка командами разрешена, get_item нет
+  assert.ok(names('adventure', 'bedrock').includes('build_house'));
+  assert.ok(!names('creative', 'bedrock').includes('get_item'));
+  assert.equal(normalizeMode('creative_spectator'), 'spectator');
+  assert.equal(normalizeMode(1), 'creative');
+  assert.equal(modeProfile('creative').reflex.eat, false);
+  assert.equal(modeProfile('survival').reflex.flee, true);
+  assert.match(modePrompt('creative'), /get_item/);
+  assert.match(modePrompt('survival'), /добывать/);
+  assert.equal(actionAllowed('collect_blocks', 'creative'), false);
+});

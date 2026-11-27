@@ -1,6 +1,8 @@
 // Context Manager: решает, что из состояния мира реально нужно LLM прямо сейчас.
 // Полный снимок мира дорогой и шумный — отправляем только релевантное.
 
+import { modePrompt } from './modes.js';
+
 const INTENTS = {
   build: /стро|дом|хиж|стен|баш|build|house|hut|wall|tower|платформ/i,
   gather: /добуд|собер|руби|копа|шахт|дерев|брёв|брев|камн|руд|mine|collect|gather|wood|log|stone|ore|dig/i,
@@ -25,6 +27,7 @@ export function buildContext(pal, message = '') {
   if (s.edition === 'bedrock') lines.push('Мир: Minecraft Bedrock. Ты действуешь командами (телепорт, /fill, /setblock, /give). Добывать блоки руками и крафтить в этом режиме ты не можешь — честно говори об этом.');
   lines.push(`Здоровье ${s.health}/20, сытость ${s.food}/20, в руке: ${s.heldItem || 'ничего'}, режим игры: ${s.gameMode}`);
   if (pal.mode) lines.push(`Фоновый режим: ${pal.mode.type} → ${pal.mode.player}`);
+  lines.push(`\n# ${modePrompt(pal.gameMode, s.edition === 'bedrock' ? 'bedrock' : 'java')}\n`);
 
   const inv = Object.entries(s.inventory);
   lines.push(`Инвентарь: ${inv.length ? inv.map(([k, v]) => `${k}×${v}`).join(', ') : 'пусто'}`);

@@ -65,6 +65,7 @@ function renderCards() {
           <span>Еда</span><span><div class="bar food"><div style="width:${w.food * 5}%"></div></div></span>
           <span>Позиция</span><span>${w.position ? `${w.position.x} ${w.position.y} ${w.position.z}` : '?'} · ${esc(w.dimension)}</span>
           <span>Время</span><span>${esc(w.time)}</span>
+          <span>Игра</span><span>${esc(({ survival: '⚔ выживание', creative: '✨ креатив', adventure: '🗺 приключение', spectator: '👻 наблюдатель' })[st.gameMode] || st.gameMode || '—')}</span>
           <span>Режим</span><span>${st.mode ? `${esc(st.mode.type)} → ${esc(st.mode.player)}` : '—'}</span>
           <span>Действие</span><span>${esc(st.currentAction || '—')}</span>
           <span>Задача</span><span>${task ? esc(task.goal) : '—'}</span>

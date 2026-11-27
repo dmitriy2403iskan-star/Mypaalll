@@ -21,6 +21,31 @@ export function itemByName(bot, name) {
   return it;
 }
 
+/** Режим креатива (Java): предметы можно брать из инвентаря креатива. */
+export const isCreative = (bot) => bot?.game?.gameMode === 'creative';
+
+let creativeSlot = 0;
+/**
+ * В креативе: положить предмет в инвентарь, если его не хватает (через инвентарь креатива).
+ * В выживании ничего не делает — там предметы надо добывать.
+ */
+export async function ensureItem(pal, name, count = 1) {
+  const { bot } = pal;
+  if (!isCreative(bot) || countItem(bot, name) >= count) return countItem(bot, name);
+  const info = bot.registry.itemsByName[name];
+  if (!info) throw new ActionError(`Нет предмета "${name}"`);
+  const Item = (await import('prismarine-item')).default(bot.registry);
+  let need = count - countItem(bot, name);
+  // хотбар 36..44: по кругу, чтобы не затирать только что выданное
+  for (let i = 0; i < 9 && need > 0; i++) {
+    const slot = 36 + (creativeSlot++ % 9);
+    const n = Math.min(need, info.stackSize || 64);
+    await bot.creative.setInventorySlot(slot, new Item(info.id, n));
+    need -= n;
+  }
+  return countItem(bot, name);
+}
+
 export function countItem(bot, name) {
   return bot.inventory.items().filter((i) => i.name === name).reduce((s, i) => s + i.count, 0);
 }

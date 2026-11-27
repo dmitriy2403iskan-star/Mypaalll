@@ -35,6 +35,7 @@ export class BedrockBody extends EventEmitter {
     this.health = 20;
     this.food = 20;
     this.dimension = 'overworld';
+    this.gameMode = 'survival';
     this.version = null;
     this.pending = new Map();   // uuid команды → { resolve, timer }
     this.ended = false;
@@ -67,7 +68,11 @@ export class BedrockBody extends EventEmitter {
       this.entity = { position: feet(p.player_position) };
       this.dimension = p.dimension || 'overworld';
       this.version = c.options?.version;
+      // fallback = режим мира по умолчанию
+      this.worldGameMode = p.world_gamemode;
+      this.setGameMode(p.player_gamemode === 'fallback' ? p.world_gamemode : p.player_gamemode);
     });
+    c.on('set_player_game_type', (p) => this.setGameMode(p.gamemode === 'fallback' ? this.worldGameMode : p.gamemode));
     c.on('spawn', () => this.emit('spawn'));
     c.on('text', (p) => this.onText(p));
     c.on('move_player', (p) => this.onMove(p.runtime_id, p.position));
@@ -106,6 +111,14 @@ export class BedrockBody extends EventEmitter {
     c.on('disconnect', (p) => this.emit('kicked', p?.message || p?.reason || 'disconnect'));
     c.on('error', (e) => this.emit('error', e));
     c.on('close', () => this.end('closed'));
+  }
+
+  setGameMode(raw) {
+    const m = String(raw ?? 'survival');
+    const norm = m.includes('spectator') ? 'spectator' : m.startsWith('creative') ? 'creative' : m.startsWith('adventure') ? 'adventure' : 'survival';
+    if (norm === this.gameMode) return;
+    this.gameMode = norm;
+    this.emit('game');
   }
 
   end(reason) {
@@ -192,7 +205,7 @@ export class BedrockBody extends EventEmitter {
       health: Math.round(this.health),
       food: Math.round(this.food),
       dimension: this.dimension,
-      gameMode: 'bedrock (команды)',
+      gameMode: this.gameMode,
       time: '—',
       heldItem: null,
       inventory: {},
