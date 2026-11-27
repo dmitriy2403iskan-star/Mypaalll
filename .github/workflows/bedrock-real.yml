@@ -26,4 +26,10 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm i --no-save minecraft-bedrock-server@1.8.0
       - name: Бот против Bedrock Dedicated Server ${{ matrix.version }}
-        run: node --no-warnings test/bedrock-bds.mjs ${{ matrix.version }}
+        run: node --no-warnings test/bedrock-bds.mjs ${{ matrix.version }} 2>&1 | tee test.log; exit ${PIPESTATUS[0]}
+        env:
+          # подробный сетевой лог — чтобы видеть, на каком шаге рвётся подключение
+          DEBUG: ${{ matrix.version != '1.26.60' && 'raknet' || '' }}
+      - name: Сетевой лог (при ошибке)
+        if: failure()
+        run: grep -vE '^\s*$' test.log | grep -iE 'raknet|connect|incompat|pong|request|reply|mtu|protocol|error' | head -120
