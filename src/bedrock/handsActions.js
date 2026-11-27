@@ -146,6 +146,26 @@ async function ensureTable(pal) {
   return table;
 }
 
+/** Запасной крафт для серверов без серверного инвентаря: /clear ингредиентов и /give результата. */
+async function craftByCommands(pal, r) {
+  const body = pal.bot; const cr = body.crafting; const inv = body.inventory;
+  const use = cr.plan(r, 1);
+  if (!use) return { ok: false, error: 'не хватает ингредиентов' };
+  const who = body.username;
+  for (const [slot, n] of use) {
+    const it = inv.slots[slot];
+    const res = await body.command(`clear ${who} ${inv.nameOf(it)} ${it.metadata || 0} ${n}`, 4000);
+    if (!res.success) return { ok: false, error: `сервер не принимает крафт из инвентаря, а команды недоступны (${res.output})` };
+    inv.slots[slot] = it.count > n ? { ...it, count: it.count - n } : null;
+  }
+  const out = r.output[0];
+  const g = await body.command(`give ${who} ${inv.nameOf(out)} ${out.count || 1} ${out.metadata || 0}`, 4000);
+  if (!g.success) return { ok: false, error: `не выдался результат (${g.output})` };
+  const dest = cr.destSlot(out, out.count || 1);
+  if (dest >= 0) cr.addOutput(dest, out, out.count || 1);
+  return { ok: true, viaCommands: true };
+}
+
 /** Скрафтить предмет руками (2x2 в инвентаре, 3x3 — у верстака). */
 export async function craftItem(pal, item, count = 1, { noTable = false } = {}) {
   const body = pal.bot;
@@ -168,7 +188,9 @@ export async function craftItem(pal, item, count = 1, { noTable = false } = {}) 
         throw new ActionError(`Не хватает материалов для ${name}: ${fmt(cr.missingFor(best))}. Инвентарь: ${fmt(body.inventory.summary())}`);
       }
       if (cr.needsTable(r) && !usedTable) { await ensureTable(pal); usedTable = true; }
-      const res = await cr.craftOnce(r, 1, { table: cr.needsTable(r) });
+      let res = cr.silent ? { ok: false, error: 'timeout' } : await cr.craftOnce(r, 1, { table: cr.needsTable(r) });
+      // старые сервера (1.16) молчат на запросы инвентаря — крафтим командами, если у бота есть права
+      if (!res.ok && /timeout/.test(res.error) && !/ok/.test(res.error)) { cr.silent = true; res = await craftByCommands(pal, r); }
       if (!res.ok) { if (made) break; throw new ActionError(`Крафт ${name} не удался: ${res.error}`); }
       made += r.output[0].count || 1;
       await sleep(80);

@@ -65,8 +65,9 @@ try {
   results.nativeReady = Boolean(alex.nativeReady);
   if (alex.nativeReady) {
     // площадка под ногами: тест не зависит от рельефа (холмы, овраги, вода)
-    await alex.command(execAt(v, 'Steve', 'fill ~-3 ~-1 ~-3 ~12 ~-1 ~3 stone'), 6000);
-    await alex.command(execAt(v, 'Steve', 'fill ~-3 ~ ~-3 ~12 ~3 ~3 air'), 6000);
+    // два слоя камня (гравий не провалится) и высокий воздух (песок/гравий сверху не засыплет)
+    await alex.command(execAt(v, 'Steve', 'fill ~-4 ~-2 ~-4 ~13 ~-1 ~4 stone'), 6000);
+    await alex.command(execAt(v, 'Steve', 'fill ~-4 ~ ~-4 ~13 ~8 ~4 air'), 6000);
     await alex.command(execAt(v, 'Steve', 'tp @s ~ ~ ~', 'Alex'), 6000);
     await alex.command(execAt(v, 'Steve', 'tp Steve ~8 ~ ~'), 6000);
     await sleep(3000); // чанки и позиции
@@ -172,7 +173,7 @@ try {
     alex.client.off('item_stack_response', onResp);
     alex.client.off('packet', onPk);
     results.craft.responses = responses.join(',');
-    results.craft.method = alex.crafting?.goodMethod;
+    results.craft.method = alex.crafting?.silent ? 'commands (сервер молчит на item_stack_request)' : alex.crafting?.goodMethod;
     results.craft.packets = pk;
     log('ответы сервера на крафт:', detail.join('\n'));
     results.craft.style = alex.crafting?.goodStyle;
