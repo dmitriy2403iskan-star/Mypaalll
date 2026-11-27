@@ -112,7 +112,11 @@ export class Hands {
     this.serverAuthBreaking = Boolean(startGame?.server_authoritative_block_breaking);
     this.md = require('minecraft-data')(`bedrock_${body.version}`);
     // 1.19+: настоящий клиент сообщает начало/конец использования предмета на блоке — без этого сервер не ставит блок
-    this.itemUseActions = Object.values(this.md.protocol.types.Action?.[1]?.mappings || {}).includes('start_item_use_on');
+    // в 1.26.60+ (новый формат block_action без switch по действию) сервер рвёт соединение на start_item_use_on,
+    // а ставит блок и без него — проверено зондом на настоящем BDS
+    const ba = this.md.protocol.types.packet_player_auth_input?.[1]?.find((f) => f.name === 'block_action');
+    const newLayout = /"option"/.test(JSON.stringify(ba?.type?.[0] ?? '')) || (ba && !JSON.stringify(ba).includes('"switch"'));
+    this.itemUseActions = !newLayout && Object.values(this.md.protocol.types.Action?.[1]?.mappings || {}).includes('start_item_use_on');
   }
 
   eye() { const p = this.movement.position; return new Vec3(p.x, p.y + EYE, p.z); }
