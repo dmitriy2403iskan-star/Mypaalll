@@ -52,6 +52,13 @@ export class BedrockWorld extends EventEmitter {
     this.dimension = typeof p.dimension === 'number' ? p.dimension : ({ overworld: 0, nether: 1, the_end: 2 }[p.dimension] ?? 0);
   }
 
+  /** Сетевой id блока в позиции: точный из update_block, если блок с тех пор не менялся. */
+  runtimeIdAt(pos, stateId) {
+    const e = this.exactRuntime?.get(`${pos.x},${pos.y},${pos.z}`);
+    if (e && e.stateId === stateId) return e.rid;
+    return this.runtimeIdOfState(stateId);
+  }
+
   /** stateId → сетевой id блока (для транзакций: клик по блоку, ломание). */
   runtimeIdOfState(stateId) {
     if (!this.stateToRuntime) {
@@ -148,6 +155,9 @@ export class BedrockWorld extends EventEmitter {
     if (!col) return;
     const info = this.registry.blocksByRuntimeId?.[p.block_runtime_id];
     if (!info) return;
+    // точный сетевой id от сервера (у блоков с поворотом обратное отображение stateId → id неоднозначно)
+    (this.exactRuntime ||= new Map()).set(`${pos.x},${pos.y},${pos.z}`, { rid: p.block_runtime_id, stateId: info.stateId });
+    if (this.exactRuntime.size > 4096) this.exactRuntime.delete(this.exactRuntime.keys().next().value);
     try {
       col.setBlock({ x: pos.x & 15, y: pos.y, z: pos.z & 15, l: 0 }, this.Block.fromStateId(info.stateId, 0));
       this.emit('blockUpdate', pos);

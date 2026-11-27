@@ -172,7 +172,7 @@ export class Hands {
   runtimeIdOf(pos) {
     const b = this.world.blockAt(pos.x, pos.y, pos.z);
     if (!b || b.stateId === undefined) return 0;
-    return this.world.runtimeIdOfState(b.stateId);
+    return this.world.runtimeIdAt ? this.world.runtimeIdAt(pos, b.stateId) : this.world.runtimeIdOfState(b.stateId);
   }
 
   waitBlock(pos, test, timeoutMs) {
