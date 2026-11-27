@@ -34,7 +34,12 @@ export default [
       if (!have) throw new ActionError(`Нет ${item} в инвентаре.`);
       const target = findPlayer(bot, player);
       if (!target) throw new ActionError(`Не вижу ${player}.`);
-      if (bot.entity.position.distanceTo(target.position) > 3) await gotoPos(pal, target.position, 2.5, 60_000);
+      if (bot.entity.position.distanceTo(target.position) > 3) {
+        try { await gotoPos(pal, target.position, 2.5, 20_000); } catch (e) {
+          // поиск пути иногда не завершается даже рядом — если игрок недалеко, просто бросаем ему
+          if (bot.entity.position.distanceTo(target.position) > 6) throw e;
+        }
+      }
       await bot.lookAt(target.position.offset(0, 1.0, 0));
       const n = Math.min(count, have);
       const id = itemByName(bot, item).id;
