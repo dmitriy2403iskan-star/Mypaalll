@@ -2,9 +2,11 @@
 // Подключается к BedrockBody и даёт API, похожее на Mineflayer: blockAt, goto, follow, stop.
 import { BedrockWorld } from './world.js';
 import { Movement, findPath } from './movement.js';
+import { Inventory, Hands } from './hands.js';
 
 export function attachFlayer(body) {
   const c = body.client;
+  body.inventory = new Inventory(body); // слушает пакеты с самого начала (itemstates приходят в start_game)
   c.once('start_game', (p) => {
     try {
       const version = c.options?.version || body.version;
@@ -12,6 +14,7 @@ export function attachFlayer(body) {
       body.world.handleStartGame(p);
       body.world.on('error', (e) => body.emit('flayerError', e));
       body.movement = new Movement(body, body.world);
+      body.hands = new Hands(body, body.world, body.movement, body.inventory, p);
       body.once('spawn', () => body.movement.start(p));
       body.nativeReady = true;
     } catch (e) {
@@ -41,5 +44,9 @@ export function attachFlayer(body) {
     g?.reject?.(new Error('Остановлено'));
   };
   body.findPath = (to, opts) => findPath(body.world, body.movement.position, to, opts);
+  /** Сломать блок руками (как bot.dig). */
+  body.dig = (pos) => { if (!body.hands) return Promise.reject(new Error('Мир ещё не загружен')); return body.hands.dig(pos); };
+  /** Поставить блок из инвентаря (как bot.placeBlock). */
+  body.placeBlock = (pos, item) => { if (!body.hands) return Promise.reject(new Error('Мир ещё не загружен')); return body.hands.place(pos, item); };
   return body;
 }

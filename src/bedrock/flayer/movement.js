@@ -52,7 +52,8 @@ export function authInputBuilder(version) {
       input_data, input_mode: 'mouse', play_mode: 'normal', interaction_model: 'crosshair',
       interact_rotation: { x: s.pitch, z: s.yaw }, gaze_direction: undefined,
       tick: BigInt(s.tick), delta: s.delta,
-      transaction: null, item_stack_request: null, block_action: null, vehicle_rotation: null, predicted_vehicle: null,
+      transaction: null, item_stack_request: null, vehicle_rotation: null, predicted_vehicle: null,
+      block_action: s.blockActions?.length ? s.blockActions : (asArray ? null : undefined),
       analogue_move_vector: s.moveVector, camera_orientation: s.cameraOrientation, raw_move_vector: s.moveVector,
     };
     for (const k of Object.keys(p)) if (!names.has(k)) delete p[k];
@@ -127,6 +128,7 @@ export class Movement {
     this.goal = null;
     this.follow = null;
     this.handledTeleport = false;
+    this.blockActions = []; // действия с блоками (ломание) — уходят в ближайшем player_auth_input
     this.build = null;
     this.timer = null;
     this.stuck = 0;
@@ -255,6 +257,8 @@ export class Movement {
     if (c.jump) flags.push('jump_down', 'jumping', 'want_up', 'start_jumping');
     if (c.sprint) flags.push('sprinting', 'sprint_down');
     if (this.handledTeleport) { flags.push('handled_teleport'); this.handledTeleport = false; }
+    const blockActions = this.blockActions.splice(0);
+    if (blockActions.length) flags.push('block_action');
     const position = { x: ent.position.x, y: ent.position.y + EYE, z: ent.position.z };
     try {
       if (this.authority === 'client') {
@@ -265,7 +269,7 @@ export class Movement {
       } else {
         const rad = (yawDeg * Math.PI) / 180;
         this.client.queue('player_auth_input', this.build({
-          pitch, yaw, position, moveVector, flags, tick: this.tick,
+          pitch, yaw, position, moveVector, flags, tick: this.tick, blockActions,
           delta: { x: ent.velocity.x, y: ent.velocity.y, z: ent.velocity.z },
           cameraOrientation: { x: -Math.sin(rad), y: 0, z: Math.cos(rad) },
         }));

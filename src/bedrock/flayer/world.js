@@ -42,12 +42,23 @@ export class BedrockWorld extends EventEmitter {
     try { this.registry.handleStartGame({ ...p, itemstates: p.itemstates || [] }); } catch (e) { this.emit('error', e); }
     // неизвестный сетевой id блока (новые/кастомные блоки) — считаем камнем, чтобы не терять весь подчанок
     const map = this.registry.blocksByRuntimeId || {};
+    this.rawRuntime = map;
+    this.stateToRuntime = null;
     const stone = this.registry.blocksByName?.stone;
     const fallback = stone ? { stateId: stone.defaultState ?? stone.minStateId, ...stone } : null;
     if (fallback) {
       this.registry.blocksByRuntimeId = new Proxy(map, { get: (t, k) => (k in t ? t[k] : (typeof k === 'string' && /^-?\d+$/.test(k) ? fallback : undefined)) });
     }
     this.dimension = typeof p.dimension === 'number' ? p.dimension : ({ overworld: 0, nether: 1, the_end: 2 }[p.dimension] ?? 0);
+  }
+
+  /** stateId → сетевой id блока (для транзакций: клик по блоку, ломание). */
+  runtimeIdOfState(stateId) {
+    if (!this.stateToRuntime) {
+      this.stateToRuntime = new Map();
+      for (const [rid, v] of Object.entries(this.rawRuntime || {})) if (!this.stateToRuntime.has(v.stateId)) this.stateToRuntime.set(v.stateId, Number(rid));
+    }
+    return this.stateToRuntime.get(stateId) ?? 0;
   }
 
   key(cx, cz) { return `${cx},${cz}`; }

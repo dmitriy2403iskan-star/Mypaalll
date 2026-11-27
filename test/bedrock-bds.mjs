@@ -102,6 +102,29 @@ try {
       results.walk.walked = alexSeen ? Math.hypot(alexSeen.x - from.x, alexSeen.z - from.z) : null;
       log('ходьба:', JSON.stringify(results.walk));
     }
+
+    // ---- РУКИ: поставить и сломать блок без команд ----
+    results.hands = { serverAuthBreaking: alex.hands?.serverAuthBreaking };
+    await alex.command('give Alex dirt 8', 6000); // подготовка
+    await sleep(1500);
+    results.hands.dirtBefore = alex.inventory.count('dirt');
+    results.hands.inventory = alex.inventory.summary();
+    const me = alex.movement.position;
+    const spot = { x: Math.floor(me.x) + 2, y: Math.floor(me.y), z: Math.floor(me.z) };
+    results.hands.spot = spot;
+    results.hands.spotBefore = alex.blockAt(spot.x, spot.y, spot.z)?.name;
+    results.hands.below = alex.blockAt(spot.x, spot.y - 1, spot.z)?.name;
+    try { results.hands.placed = await alex.placeBlock(spot, 'dirt'); } catch (e) { results.hands.placeError = e.message; }
+    await sleep(500);
+    results.hands.afterPlace = alex.blockAt(spot.x, spot.y, spot.z)?.name;
+    try { results.hands.dug = await alex.dig(spot); } catch (e) { results.hands.digError = e.message; }
+    await sleep(500);
+    results.hands.afterDig = alex.blockAt(spot.x, spot.y, spot.z)?.name;
+    // подобрать дроп: подойти к месту
+    try { await alex.goto({ x: spot.x + 0.5, y: spot.y, z: spot.z + 0.5 }, 0.6, 8000); } catch { /* */ }
+    await sleep(1500);
+    results.hands.dirtAfter = alex.inventory.count('dirt');
+    log('руки:', JSON.stringify(results.hands));
   }
   alex.quit(); steve.quit();
 } catch (e) {
@@ -113,7 +136,10 @@ try {
   // ходьба засчитывается, если сервер видит, что бот прошёл ≥5 блоков и стоит рядом со Steve
   const walkOk = !results.nativeReady || (results.walk?.walked >= 5 && results.walk?.serverDistToSteve <= 3.5);
   results.walkOk = walkOk;
-  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && !results.error;
+  // руки засчитываются, если СЕРВЕР подтвердил установку и ломание (мы видим его update_block)
+  const handsOk = !results.nativeReady || (results.hands?.afterPlace === 'dirt' && /air/.test(results.hands?.afterDig || ''));
+  results.handsOk = handsOk;
+  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && handsOk && !results.error;
   log(ok ? 'ВСЁ OK' : 'ЕСТЬ ОШИБКИ');
   setTimeout(() => process.exit(ok ? 0 : 1), 500);
 }
