@@ -256,6 +256,12 @@ try {
     J.breadOnGround = [...alex.inventory.drops.values()].filter((d) => d.name === 'bread').length;
     alex.client.off('add_item_entity', onAdd); alex.client.off("take_item_entity", onTake2);
     J.dropLog = dropLog.join('; '); J.alexBread = alex.inventory.count('bread');
+    // правда сервера: /clear с maxCount 0 только считает
+    J.steveBreadServer = (await alex.command('clear Steve bread 0 0', 6000)).output;
+    // пришлёт ли сервер инвентарь, если Steve откроет его (как игрок по E)
+    const before = invPk.Steve.length;
+    await steve.crafting.openInventory(); await sleep(1000); steve.crafting.closeWindow(); await sleep(800);
+    J.steveAfterOpen = `пакетов: ${invPk.Steve.length - before}, хлеба: ${steve.inventory.count('bread')}`;
     // сундук рядом
     const mp = alex.movement.position;
     const chestAt = { x: Math.floor(mp.x) - 2, y: Math.floor(mp.y), z: Math.floor(mp.z) };
