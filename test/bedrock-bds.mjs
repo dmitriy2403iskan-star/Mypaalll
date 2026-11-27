@@ -112,10 +112,12 @@ try {
     const me = alex.movement.position;
     // ближайшая клетка: воздух, над ней воздух, снизу твёрдый блок, не там, где стоит бот
     let spot = null;
-    for (const [dx, dz] of [[2, 0], [0, 2], [-2, 0], [0, -2], [2, 1], [1, 2], [2, -1], [-1, 2]]) {
+    for (const [dx, dz] of [[0, 2], [0, -2], [-2, 0], [2, 0], [-2, 1], [1, 2], [-2, -1], [-1, 2]]) {
       const c = { x: Math.floor(me.x) + dx, y: Math.floor(me.y), z: Math.floor(me.z) + dz };
       const here = alex.blockAt(c.x, c.y, c.z); const up = alex.blockAt(c.x, c.y + 1, c.z); const down = alex.blockAt(c.x, c.y - 1, c.z);
-      if (here?.name === 'air' && up?.name === 'air' && down?.solid) { spot = c; break; }
+      const sp = alex.findPlayer('Steve')?.position;
+      const steveThere = sp && Math.abs(sp.x - (c.x + 0.5)) < 1.3 && Math.abs(sp.z - (c.z + 0.5)) < 1.3;
+      if (here?.name === 'air' && up?.name === 'air' && down?.solid && !steveThere) { spot = c; break; }
     }
     spot ||= { x: Math.floor(me.x) + 2, y: Math.floor(me.y), z: Math.floor(me.z) };
     results.hands.spot = spot;

@@ -199,6 +199,10 @@ export class Hands {
       if (b && b.solid) { ref = n; face = f; break; }
     }
     if (!ref) throw new Error('Не к чему прикрепить блок');
+    // в клетке стоит игрок (или сам бот) — сервер такую установку отклонит
+    const blocked = [...(this.body.players?.values?.() || [])].some((pl) => pl.position && Math.abs(pl.position.x - (target.x + 0.5)) < 0.8 && Math.abs(pl.position.z - (target.z + 0.5)) < 0.8 && pl.position.y > target.y - 1.8 && pl.position.y < target.y + 1)
+      || (Math.abs(this.movement.position.x - (target.x + 0.5)) < 0.8 && Math.abs(this.movement.position.z - (target.z + 0.5)) < 0.8 && this.movement.position.y > target.y - 1.8 && this.movement.position.y < target.y + 1);
+    if (blocked) throw new Error('В этой клетке стоит игрок — отойди или выбери другое место');
     if (!this.inReach(target, 5.5)) throw new Error('Слишком далеко, подойди ближе');
     this.inv.select(slot);
     await sleep(60);
