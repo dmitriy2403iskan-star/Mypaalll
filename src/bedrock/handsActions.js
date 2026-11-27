@@ -76,6 +76,7 @@ export async function pickupDrops(pal, near) {
     await sleep(500);
     if (!body.inventory.nearbyDrops(near, 6).length) break;
   }
+  await body.inventory.resync().catch(() => {}); // подобранное сервер в слотах не присылает — сверяемся
 }
 
 export async function placeOne(pal, item, pos) {
@@ -473,6 +474,7 @@ export async function pickupItems(pal, radius = 16) {
     await sleep(400);
     if (body.inventory.nearbyDrops(drop.position, 0.8).length) body.inventory.drops.forEach((d, k) => { if (d === drop) body.inventory.drops.delete(k); });
   }
+  await body.inventory.resync().catch(() => {});
   const after = body.inventory.summary(); const got = {};
   for (const [k, v] of Object.entries(after)) if (v > (before[k] || 0)) got[k] = v - (before[k] || 0);
   return Object.keys(got).length ? `Подобрал: ${fmt(got)}.` : 'Рядом нечего подбирать.';

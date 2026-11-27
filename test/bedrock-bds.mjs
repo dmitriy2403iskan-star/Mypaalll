@@ -172,6 +172,7 @@ try {
     results.hands.dropsLeft = alex.inventory.nearbyDrops(spot, 6).length;
     alex.client.off("take_item_entity", onTake);
     results.hands.pickedBy = takers.join(',');
+    results.hands.resynced = await alex.inventory.resync();
     results.hands.dirtAfter = alex.inventory.count('dirt');
     log('руки:', JSON.stringify(results.hands));
 
@@ -252,6 +253,7 @@ try {
     alex.client.on('add_item_entity', onAdd); alex.client.on("take_item_entity", onTake2);
     await step('give', async () => `${await H.giveTo(pal, 'Steve', 'bread', 2)} шт.`);
     for (let k = 0; k < 10 && steve.inventory.count('bread') <= steveBread0; k++) await sleep(500);
+    await steve.inventory.resync();
     J.steveGotBread = steve.inventory.count('bread') - steveBread0;
     J.breadOnGround = [...alex.inventory.drops.values()].filter((d) => d.name === 'bread').length;
     alex.client.off('add_item_entity', onAdd); alex.client.off("take_item_entity", onTake2);
@@ -280,6 +282,7 @@ try {
     await step('attack', () => H.attackTarget(pal, 'pig'));
     // печь: булыжник → камень
     await step('smelt', () => H.smeltItem(pal, 'cobblestone', 1));
+    await alex.inventory.resync();
     J.stone = alex.inventory.count('stone');
     log('как в Java:', JSON.stringify(J));
     log('пакеты инвентаря Alex:', invPk.Alex.join(' '));

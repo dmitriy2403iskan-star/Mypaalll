@@ -36,8 +36,32 @@ export class Inventory {
     this.drops = new Map();
     c.on('add_item_entity', (p) => this.drops.set(String(p.runtime_entity_id), { name: this.nameOf(p.item), position: p.position, at: Date.now() }));
     c.on('remove_entity', (p) => { for (const k of this.drops.keys()) if (k === String(p.entity_id_self) || k === String(p.runtime_entity_id)) this.drops.delete(k); });
-    c.on('take_item_entity', (p) => this.drops.delete(String(p.runtime_entity_id)));
+    c.on('take_item_entity', (p) => {
+      this.drops.delete(String(p.runtime_entity_id));
+      // сервер BDS не присылает слоты при подборе — просим полный инвентарь (как клиент при рассинхроне)
+      if (String(p.target ?? p.target_runtime_entity_id) === String(body.runtimeId)) this.resyncSoon();
+    });
     c.on('move_entity', (p) => { const d = this.drops.get(String(p.runtime_entity_id)); if (d) d.position = p.position; });
+  }
+
+  /** Попросить сервер прислать весь инвентарь заново (inventory_transaction inventory_mismatch). */
+  resync(timeoutMs = 1500) {
+    return new Promise((resolve) => {
+      const c = this.body.client;
+      let done = false;
+      const on = (p) => { if (p.window_id === 'inventory' || p.window_id === 0) finish(true); };
+      const finish = (v) => { if (done) return; done = true; clearTimeout(t); c.off('inventory_content', on); resolve(v); };
+      const t = setTimeout(() => finish(false), timeoutMs);
+      c.on('inventory_content', on);
+      try {
+        c.queue('inventory_transaction', { transaction: { legacy: { legacy_request_id: 0 }, transaction_type: 'inventory_mismatch', actions: [] } });
+      } catch (e) { this.body.emit('flayerError', e); finish(false); }
+    });
+  }
+
+  resyncSoon(ms = 400) {
+    clearTimeout(this.resyncTimer);
+    this.resyncTimer = setTimeout(() => { this.resync().catch(() => {}); }, ms);
   }
 
   /** Ближайшие лежащие предметы. */

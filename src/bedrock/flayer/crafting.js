@@ -579,6 +579,8 @@ export class Crafting {
   }
 
   closeWindow() {
+    // после работы с контейнером сверяем инвентарь с сервером (он не всегда присылает изменения)
+    if (this.window && !/inventory/.test(String(this.window.type))) this.body.inventory?.resyncSoon?.(300);
     // инвентарь открывали, а container_open не пришёл — всё равно закрываем, иначе сервер не даст ставить блоки
     if (!this.window && this.inventoryOpened) this.window = { id: 'inventory', type: 'inventory' };
     this.inventoryOpened = false;
