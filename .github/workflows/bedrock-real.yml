@@ -25,6 +25,12 @@ jobs:
           node-version: 22
       - run: npm ci --no-audit --no-fund
       - run: npm i --no-save minecraft-bedrock-server@1.8.0
+      - name: libssl1.1 для старых серверов Bedrock (1.16–1.19 собраны под старый OpenSSL)
+        if: startsWith(matrix.version, '1.16') || startsWith(matrix.version, '1.19')
+        run: |
+          wget -q http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb -O /tmp/libssl1.1.deb \
+            || wget -q http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb -O /tmp/libssl1.1.deb
+          sudo dpkg -i /tmp/libssl1.1.deb
       - name: Бот против Bedrock Dedicated Server ${{ matrix.version }}
         run: node --no-warnings test/bedrock-bds.mjs ${{ matrix.version }} 2>&1 | tee test.log; exit ${PIPESTATUS[0]}
         env:
