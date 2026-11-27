@@ -25,10 +25,13 @@ function connect(name) {
     b.once('spawn', () => { clearTimeout(t); resolve(b); });
     b.on('error', (e) => log(name, 'error', e.message));
     b.on('kicked', (r) => log(name, 'kicked', r));
+    b.on('end', (r) => log(name, 'соединение закрыто:', r));
   });
 }
 
 let server;
+// сторож: если что-то зависло (например, сервер молча закрыл соединение) — печатаем, что успели, и выходим
+const watchdog = setTimeout(() => { results.error = 'сторож: тест завис дольше 8 минут'; console.log(JSON.stringify(results, (k, x) => (typeof x === 'bigint' ? String(x) : x), 2)); try { server?.kill(); } catch { /* */ } process.exit(1); }, 8 * 60000);
 try {
   log(`скачиваю и запускаю BDS ${version} в ${root}`);
   server = await bds.startServerAndWait2(version, 180000, { root, path: root, 'server-port': port, 'server-portv6': port + 1 });
@@ -129,9 +132,20 @@ try {
     const skip = /move_|level_chunk|subchunk|network_chunk|set_time|update_attributes|set_entity_data|add_entity|move_entity|player_list|level_event|set_entity_motion/;
     const onPkt = (pk) => { const n = pk?.data?.name; if (n && !skip.test(n)) seenAfterPlace[n] = (seenAfterPlace[n] || 0) + 1; };
     alex.client.on('packet', onPkt);
+    // по шагам: сначала только взять блок в руку — проверяем, что соединение живо
+    const sent = [];
+    const origQueue = alex.client.queue.bind(alex.client);
+    alex.client.queue = (n, d) => { if (n !== 'player_auth_input') sent.push(n); else if (d.transaction || d.block_action?.length) sent.push(`auth(${d.transaction ? 'tx' : ''}${d.block_action?.length ? 'ba' : ''})`); return origQueue(n, d); };
+    const dslot = alex.inventory.findSlot('dirt', true);
+    if (dslot >= 0) alex.inventory.select(dslot);
+    await sleep(1500);
+    results.hands.aliveAfterSelect = !alex.ended;
     try { results.hands.placed = await alex.placeBlock(spot, 'dirt'); } catch (e) { results.hands.placeError = e.message; }
     alex.client.off('packet', onPkt);
     results.hands.placeVariant = alex.hands?.goodVariant;
+    results.hands.aliveAfterPlace = !alex.ended;
+    results.hands.sent = [...new Set(sent)].join(',');
+    alex.client.queue = origQueue;
     results.hands.serverReplied = seenAfterPlace;
     await sleep(500);
     results.hands.afterPlace = alex.blockAt(spot.x, spot.y, spot.z)?.name;
