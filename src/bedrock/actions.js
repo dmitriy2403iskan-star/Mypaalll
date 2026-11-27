@@ -4,7 +4,7 @@ import { ActionError } from '../actions/util.js';
 import { house, simple, custom, billOfMaterials } from '../building/blueprints.js';
 import { fmt } from '../building/executor.js';
 import { blockArg, execAt, resolveBlock, nameArg } from './blocks.js';
-import { handsReady, collectBlocks, placeOne, breakOne, buildByHands } from './handsActions.js';
+import { handsReady, collectBlocks, placeOne, breakOne, buildByHands, craftItem } from './handsActions.js';
 
 // Bedrock: ladder facing_direction 2=north 3=south 4=west 5=east (куда «смотрит» лестница)
 const LADDER_FACING = { '-1,0,0': 5, '1,0,0': 4, '0,0,-1': 3, '0,0,1': 2 };
@@ -127,6 +127,15 @@ export default [
     async run(pal, { block, count = 1 }) {
       if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен — подожди пару секунд.');
       return collectBlocks(pal, String(block).replace(/^minecraft:/, ''), count);
+    },
+  },
+  {
+    name: 'craft_item',
+    description: 'Скрафтить предмет руками по рецептам сервера: 2x2 в инвентаре, 3x3 у верстака (верстак найдётся рядом, будет поставлен или скрафчен). Примеры: oak_planks, stick, crafting_table, wooden_pickaxe, furnace, torch.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number', description: 'Сколько предметов нужно получить' } }, required: ['item'] },
+    async run(pal, { item, count = 1 }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен — подожди пару секунд.');
+      return craftItem(pal, item, count);
     },
   },
   {

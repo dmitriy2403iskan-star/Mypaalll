@@ -27,7 +27,7 @@ export function buildContext(pal, message = '') {
   if (s.edition === 'bedrock') {
     const walks = pal.bot?.nativeReady && pal.bot?.movement;
     lines.push(walks
-      ? 'Мир: Minecraft Bedrock. Ходишь сам (своё тело: ходьба, прыжки, обход препятствий). Строишь и выдаёшь предметы командами (/fill, /setblock, /give). Копать руками и крафтить в Bedrock пока не умеешь — честно говори об этом.'
+      ? 'Мир: Minecraft Bedrock. У тебя своё тело, как в Java: ходишь, копаешь и ставишь блоки руками (collect_blocks, place_block, break_block), крафтишь по рецептам сервера (craft_item; верстак найдёшь, поставишь или скрафтишь сам), строишь руками в выживании. Команды (/give, /fill) — только в креативе или если игрок прямо попросил.'
       : 'Мир: Minecraft Bedrock. Ты действуешь командами (телепорт, /fill, /setblock, /give). Добывать блоки руками и крафтить в этом режиме ты не можешь — честно говори об этом.');
   }
   lines.push(`Здоровье ${s.health}/20, сытость ${s.food}/20, в руке: ${s.heldItem || 'ничего'}, режим игры: ${s.gameMode}`);

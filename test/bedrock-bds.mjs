@@ -145,6 +145,29 @@ try {
     results.hands.dropsLeft = alex.inventory.nearbyDrops(spot, 6).length;
     results.hands.dirtAfter = alex.inventory.count('dirt');
     log('руки:', JSON.stringify(results.hands));
+
+    // ---- КРАФТ без команд: доски (2x2), палки, верстак, кирка (3x3 у верстака) ----
+    results.craft = { recipes: alex.crafting?.recipes.length || 0 };
+    let g = await alex.command('give Alex oak_log 3', 6000);
+    if (!g.success) g = await alex.command('give Alex log 3', 6000);
+    await sleep(1500);
+    const responses = [];
+    const onResp = (p) => { for (const r of p.responses || []) responses.push(r.status); };
+    alex.client.on('item_stack_response', onResp);
+    const { craftItem } = await import('../src/bedrock/handsActions.js');
+    const pal = { bot: alex, interrupted: false };
+    const planks = () => Object.entries(alex.inventory.summary()).filter(([n]) => /planks/.test(n)).reduce((a, [, c]) => a + c, 0);
+    for (const [item, n] of [['oak_planks', 12], ['stick', 4], ['crafting_table', 1], ['wooden_pickaxe', 1]]) {
+      try { results.craft[item] = await craftItem(pal, item, n); } catch (e) { results.craft[item] = `ОШИБКА: ${e.message}`; }
+      log('крафт', item, '→', results.craft[item]);
+    }
+    alex.client.off('item_stack_response', onResp);
+    results.craft.responses = responses.join(',');
+    results.craft.style = alex.crafting?.goodStyle;
+    results.craft.planks = planks();
+    results.craft.pickaxe = alex.inventory.count('wooden_pickaxe');
+    results.craft.inventory = alex.inventory.summary();
+    log('крафт:', JSON.stringify(results.craft));
   }
   alex.quit(); steve.quit();
 } catch (e) {
@@ -160,7 +183,10 @@ try {
   // после ломания там воздух (или натекла вода) — главное, что сервер убрал землю
   const handsOk = !results.nativeReady || (results.hands?.afterPlace === 'dirt' && results.hands?.afterDig && results.hands.afterDig !== 'dirt');
   results.handsOk = handsOk;
-  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && handsOk && !results.error;
+  // крафт засчитывается, если появились доски (2x2) и кирка (3x3 у верстака)
+  const craftOk = !results.nativeReady || (results.craft?.pickaxe >= 1 && /Скрафтил/.test(String(results.craft?.oak_planks)));
+  results.craftOk = craftOk;
+  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && handsOk && craftOk && !results.error;
   log(ok ? 'ВСЁ OK' : 'ЕСТЬ ОШИБКИ');
   setTimeout(() => process.exit(ok ? 0 : 1), 500);
 }

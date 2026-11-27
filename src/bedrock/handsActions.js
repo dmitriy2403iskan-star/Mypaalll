@@ -124,4 +124,58 @@ export async function buildByHands(pal, plan, origin, title, { dryRun = false } 
   return `${title} — готово руками: ${plan.summary}. Поставлено ${placed}, выкопано ${dug}.${failed.length ? ` Не вышло ${failed.length}: ${failed.slice(0, 2).join('; ')}` : ''}`;
 }
 
+/** Верстак рядом: найти, иначе поставить из инвентаря, иначе скрафтить из досок (как craft_item в Java). */
+async function ensureTable(pal) {
+  const body = pal.bot;
+  let table = findBlocksNear(body, 'crafting_table', 24, 1)[0];
+  if (!table) {
+    if (!body.inventory.count('crafting_table')) await craftItem(pal, 'crafting_table', 1, { noTable: true });
+    const me = body.movement.position;
+    const bx = Math.floor(me.x); const by = Math.floor(me.y); const bz = Math.floor(me.z);
+    for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 1], [1, 2], [-2, -1], [-1, -2]]) {
+      const c = { x: bx + dx, y: by, z: bz + dz };
+      const here = body.blockAt(c.x, c.y, c.z); const down = body.blockAt(c.x, c.y - 1, c.z);
+      if (here && AIR.test(here.name) && down?.solid) {
+        try { if (await body.placeBlock(c, 'crafting_table')) { table = c; break; } } catch { /* следующая клетка */ }
+      }
+    }
+    if (!table) throw new ActionError('Не получилось поставить верстак рядом');
+  }
+  await approach(pal, table, 3);
+  if (!(await body.crafting.openTable(table))) throw new ActionError('Верстак не открылся');
+  return table;
+}
+
+/** Скрафтить предмет руками (2x2 в инвентаре, 3x3 — у верстака). */
+export async function craftItem(pal, item, count = 1, { noTable = false } = {}) {
+  const body = pal.bot;
+  const cr = body.crafting;
+  const name = String(item).replace(/^minecraft:/, '');
+  if (!cr?.recipes.length) throw new ActionError('Сервер ещё не прислал рецепты — подожди пару секунд.');
+  const list = cr.recipesFor(name);
+  if (!list.length) throw new ActionError(`Для «${name}» нет рецепта крафта на этом сервере.`);
+  count = Math.min(Math.max(1, Math.round(count || 1)), 256);
+  const before = body.inventory.count(cr.outputName(list[0]));
+  let made = 0; let usedTable = false;
+  try {
+    while (made < count && !pal.interrupted) {
+      const r = list.find((x) => cr.plan(x, 1) && !(noTable && cr.needsTable(x)));
+      if (!r) {
+        if (made) break;
+        const best = list.find((x) => !(noTable && cr.needsTable(x))) || list[0];
+        throw new ActionError(`Не хватает материалов для ${name}: ${fmt(cr.missingFor(best))}. Инвентарь: ${fmt(body.inventory.summary())}`);
+      }
+      if (cr.needsTable(r) && !usedTable) { await ensureTable(pal); usedTable = true; }
+      const res = await cr.craftOnce(r, 1);
+      if (!res.ok) { if (made) break; throw new ActionError(`Крафт ${name} не удался: ${res.error}`); }
+      made += r.output[0].count || 1;
+      await sleep(80);
+    }
+  } finally {
+    if (usedTable) cr.closeWindow();
+  }
+  const outName = cr.outputName(list[0]);
+  return `Скрафтил ${made} ${outName}${made < count ? ` (на ${count} не хватило материалов)` : ''}. Теперь в инвентаре: ${body.inventory.count(outName) || before + made}.`;
+}
+
 export { house, simple, custom };

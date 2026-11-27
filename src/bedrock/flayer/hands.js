@@ -188,7 +188,9 @@ export class Hands {
   /** Поставить блок из хотбара/инвентаря рядом с опорным блоком. target — куда ставим. */
   async place(target, itemName) {
     target = { x: Math.floor(target.x), y: Math.floor(target.y), z: Math.floor(target.z) };
-    const slot = this.inv.findSlot(itemName, true);
+    let slot = this.inv.findSlot(itemName, true);
+    // предмет в рюкзаке — переложить в хотбар, как сделал бы игрок
+    if (slot < 0 && this.inv.count(itemName) && this.body.crafting) slot = await this.body.crafting.toHotbar(itemName);
     if (slot < 0) throw new Error(this.inv.count(itemName) ? `${itemName} не в хотбаре` : `Нет ${itemName}`);
     // опора: соседний твёрдый блок; кликаем по его грани, обращённой к цели
     let ref = null; let face = 1;

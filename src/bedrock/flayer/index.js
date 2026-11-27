@@ -3,10 +3,12 @@
 import { BedrockWorld } from './world.js';
 import { Movement, findPath } from './movement.js';
 import { Inventory, Hands } from './hands.js';
+import { Crafting } from './crafting.js';
 
 export function attachFlayer(body) {
   const c = body.client;
   body.inventory = new Inventory(body); // слушает пакеты с самого начала (itemstates приходят в start_game)
+  body.crafting = new Crafting(body); // рецепты приходят сразу после start_game
   c.once('start_game', (p) => {
     try {
       const version = c.options?.version || body.version;
