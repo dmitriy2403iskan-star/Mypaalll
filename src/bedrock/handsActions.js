@@ -316,6 +316,14 @@ export async function giveTo(pal, player, item, count) {
     if (!r.ok) { if (!dropped) throw new ActionError(`Не получилось выбросить: ${r.error}`); break; }
     dropped += n; left -= n;
   }
+  // отойти от брошенного, чтобы не подобрать своё же обратно (задержка подбора короткая)
+  if (player && dropped) {
+    const me = body.movement.position; const pp = body.findPlayer(player)?.position;
+    if (pp) {
+      const dx = me.x - pp.x; const dz = me.z - pp.z; const l = Math.hypot(dx, dz) || 1;
+      await body.goto({ x: me.x + (dx / l) * 3, y: me.y, z: me.z + (dz / l) * 3 }, 0.8, 3000).catch(() => {});
+    }
+  }
   return dropped;
 }
 
