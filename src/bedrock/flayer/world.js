@@ -76,7 +76,10 @@ export class BedrockWorld extends EventEmitter {
       const y = (this.modern ? col.minCY : 0) + i;
       const section = new col.Section(this.registry, this.Block, { y, subChunkVersion: col.subChunkVersion });
       section.decode(StorageType.Runtime, stream);
-      const sy = typeof section.y === 'number' && section.subChunkVersion === 9 ? section.y : y;
+      // в v9 индекс высоты записан байтом со знаком (-4 = 252), prismarine-chunk читает его без знака
+      let sy = y;
+      if (typeof section.y === 'number' && section.subChunkVersion === 9) sy = section.y > 127 ? section.y - 256 : section.y;
+      section.y = sy;
       col.setSection(sy, section);
     }
   }

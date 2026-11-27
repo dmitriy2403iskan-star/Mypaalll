@@ -83,8 +83,10 @@ export class BedrockBody extends EventEmitter {
     c.on('text', (p) => this.onText(p));
     c.on('move_player', (p) => this.onMove(p.runtime_id, p.position));
     c.on('add_player', (p) => {
-      this.byRuntime.set(p.runtime_id, p.username);
-      this.players.set(p.username, { runtimeId: p.runtime_id, position: feet(p.position) });
+      // в старых версиях поле называется runtime_entity_id, в новых — runtime_id
+      const rid = p.runtime_id ?? p.runtime_entity_id;
+      this.byRuntime.set(rid, p.username);
+      this.players.set(p.username, { runtimeId: rid, position: feet(p.position) });
     });
     c.on('remove_entity', (p) => {
       for (const [rid, name] of this.byRuntime) {
