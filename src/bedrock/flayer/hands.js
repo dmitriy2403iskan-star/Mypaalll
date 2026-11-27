@@ -201,24 +201,33 @@ export class Hands {
     if (!ref) throw new Error('Не к чему прикрепить блок');
     if (!this.inReach(target, 5.5)) throw new Error('Слишком далеко, подойди ближе');
     this.inv.select(slot);
+    await sleep(60);
     const [fx, fy, fz] = FACE_VEC[face];
-    // смотрим прицелом в точку клика на грани опорного блока (сервер проверяет луч взгляда)
     const click = { x: 0.5 + fx * 0.5, y: 0.5 + fy * 0.5, z: 0.5 + fz * 0.5 };
-    // 1.19+ проверяют луч взгляда в грань; старые серверы принимали взгляд в центр цели — так и оставляем
-    if (this.viaAuthInput()) this.movement.lookAt({ x: ref.x + click.x, y: ref.y + click.y, z: ref.z + click.z });
-    else this.movement.lookAt({ x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 });
-    await sleep(120); // пусть сервер получит новый поворот головы до клика
-    if (this.itemUseActions) {
-      this.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face });
-      setTimeout(() => this.movement.blockActions.push({ action: 'stop_item_use_on', position: { ...ref }, face }), 100);
+    const facePoint = { x: ref.x + click.x, y: ref.y + click.y, z: ref.z + click.z };
+    const center = { x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 };
+    // варианты, которые принимают разные версии серверов; удачный запоминаем и пробуем первым
+    const modern = this.viaAuthInput();
+    const all = modern
+      ? [['auth', 'face'], ['auth', 'center'], ['tx', 'face'], ['tx', 'center']]
+      : [['tx', 'center'], ['tx', 'face']];
+    const variants = all.map(([via, look]) => ({ key: `${via}:${look}`, auth: via === 'auth', look: look === 'face' ? facePoint : center }));
+    const goodIdx = variants.findIndex((v) => v.key === this.goodVariant);
+    if (goodIdx > 0) variants.unshift(variants.splice(goodIdx, 1)[0]);
+    for (const v of variants) {
+      this.movement.lookAt(v.look);
+      await sleep(120); // сервер должен получить новый поворот головы до клика
+      if (this.itemUseActions && v.auth) {
+        this.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face });
+        setTimeout(() => this.movement.blockActions.push({ action: 'stop_item_use_on', position: { ...ref }, face }), 100);
+      }
+      this.useItem({ action_type: 'click_block', block_position: ref, face, click_pos: click, block_runtime_id: this.runtimeIdOf(ref) }, v.auth);
+      this.swing();
+      const ok = await this.waitBlock(target, (b) => b.name !== 'air' && !/water/.test(b.name), 1500);
+      if (ok) { this.goodVariant = v.key; return true; }
+      if (!this.inv.count(itemName)) break;
     }
-    this.useItem({
-      action_type: 'click_block', block_position: ref, face,
-      click_pos: click,
-      block_runtime_id: this.runtimeIdOf(ref),
-    });
-    this.swing();
-    return this.waitBlock(target, (b) => b.name !== 'air' && !/water/.test(b.name), 2500);
+    return false;
   }
 
   viaAuthInput() {
@@ -228,7 +237,7 @@ export class Hands {
   }
 
   /** inventory_transaction item_use с полями под версию. */
-  useItem(d) {
+  useItem(d, viaAuth) {
     const e = this.eye();
     const data = {
       action_type: d.action_type, trigger_type: 'player_input', block_position: d.block_position, face: d.face,
@@ -238,8 +247,8 @@ export class Hands {
     };
     const fields = new Set(this.md.protocol.types.TransactionUseItem[1].map((f) => f.name));
     for (const k of Object.keys(data)) if (!fields.has(k)) delete data[k];
-    // 1.19+ с серверной проверкой движения: использование предмета принимается только внутри player_auth_input
-    if (this.viaAuthInput()) {
+    // 1.19+ с серверной проверкой движения: использование предмета обычно принимается внутри player_auth_input
+    if (viaAuth ?? this.viaAuthInput()) {
       this.movement.itemInteract = { legacy: { legacy_request_id: 0 }, actions: [], data };
       return;
     }

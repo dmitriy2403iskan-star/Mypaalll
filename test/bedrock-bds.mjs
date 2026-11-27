@@ -128,6 +128,7 @@ try {
     alex.client.on('packet', onPkt);
     try { results.hands.placed = await alex.placeBlock(spot, 'dirt'); } catch (e) { results.hands.placeError = e.message; }
     alex.client.off('packet', onPkt);
+    results.hands.placeVariant = alex.hands?.goodVariant;
     results.hands.serverReplied = seenAfterPlace;
     await sleep(500);
     results.hands.afterPlace = alex.blockAt(spot.x, spot.y, spot.z)?.name;
