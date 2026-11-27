@@ -63,8 +63,10 @@ export function authInputBuilder(version) {
 // ---------------------------------------------------------------- поиск пути A*
 export function findPath(world, start, goal, { range = 1, maxNodes = 4000 } = {}) {
   const solid = (x, y, z) => { const b = world.blockAt(x, y, z); return !b || b.solid; };
-  const free = (x, y, z) => { const b = world.blockAt(x, y, z); return b && !b.solid && !/lava|water/.test(b.name); };
-  const standable = (x, y, z) => free(x, y, z) && free(x, y + 1, z) && solid(x, y - 1, z);
+  // вода проходима (мелководье, реки — физика сама плывёт), лава — нет
+  const free = (x, y, z) => { const b = world.blockAt(x, y, z); return b && !b.solid && !/lava|fire/.test(b.name); };
+  const wet = (x, y, z) => /water/.test(world.blockAt(x, y, z)?.name || '');
+  const standable = (x, y, z) => free(x, y, z) && free(x, y + 1, z) && (solid(x, y - 1, z) || wet(x, y, z) || wet(x, y - 1, z));
   const key = (x, y, z) => `${x},${y},${z}`;
   const h = (x, y, z) => Math.hypot(x - goal.x, (y - goal.y) * 1.5, z - goal.z);
   const s = { x: Math.floor(start.x), y: Math.floor(start.y), z: Math.floor(start.z) };
@@ -85,7 +87,7 @@ export function findPath(world, start, goal, { range = 1, maxNodes = 4000 } = {}
         if (dy === 1 && !free(cur.x, cur.y + 2, cur.z)) continue; // прыжок — нужен потолок
         if (dx && dz && (!free(cur.x + dx, cur.y, cur.z) || !free(cur.x, cur.y, cur.z + dz))) continue; // не срезаем углы
         if (dy < 0) { let ok = true; for (let k = 0; k > dy; k--) if (!free(x, cur.y + k, z) || !free(x, cur.y + k + 1, z)) ok = false; if (!ok) continue; }
-        const g = cur.g + (dx && dz ? 1.414 : 1) + (dy > 0 ? 0.6 : 0) + (dy < 0 ? -dy * 0.3 : 0);
+        const g = cur.g + (dx && dz ? 1.414 : 1) + (dy > 0 ? 0.6 : 0) + (dy < 0 ? -dy * 0.3 : 0) + (wet(x, y, z) ? 2 : 0);
         const k = key(x, y, z);
         if (seen.has(k) && seen.get(k) <= g) continue;
         seen.set(k, g);
@@ -227,7 +229,8 @@ export class Movement {
     this.lookAt({ x: aim.x, y: pos.y + EYE, z: aim.z });
     this.controls.forward = true;
     this.controls.sprint = Math.hypot(aim.x - pos.x, aim.z - pos.z) > 4;
-    if ((next && next.y > Math.floor(pos.y)) || this.fake.entity.isCollidedHorizontally) this.controls.jump = true;
+    // прыжок: ступенька, упёрлись в стену или плывём (держимся на поверхности)
+    if ((next && next.y > Math.floor(pos.y)) || this.fake.entity.isCollidedHorizontally || this.fake.entity.isInWater) this.controls.jump = true;
   }
 
   followTarget() {
