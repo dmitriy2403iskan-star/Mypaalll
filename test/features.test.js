@@ -145,7 +145,7 @@ test('Bedrock: чертёж → команды /fill и /setblock', async () => 
   assert.ok(cmds.findIndex((c) => c.endsWith(' air')) < cmds.findIndex((c) => c.endsWith(' oak_planks')));
   const names = BEDROCK_ACTIONS.map((a) => a.name);
   for (const n of ['follow_player', 'build_house', 'run_command', 'plan_crafting', 'remember']) assert.ok(names.includes(n), n);
-  assert.ok(!names.includes('collect_blocks'), 'в Bedrock нет ручной добычи');
+  assert.ok(names.includes('collect_blocks') && names.includes('place_block'), 'в Bedrock есть добыча и установка руками');
   assert.equal(new Set(names).size, names.length, 'без дубликатов');
   assert.ok(ACTIONS.find((a) => a.name === 'build_structure').parameters.properties.type.enum.includes('hut'), 'старый тип hut сохранён');
 });

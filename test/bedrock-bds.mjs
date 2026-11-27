@@ -114,7 +114,14 @@ try {
     results.hands.spot = spot;
     results.hands.spotBefore = alex.blockAt(spot.x, spot.y, spot.z)?.name;
     results.hands.below = alex.blockAt(spot.x, spot.y - 1, spot.z)?.name;
+    // что сервер отвечает на попытку поставить блок (для отладки новых версий)
+    const seenAfterPlace = {};
+    const skip = /move_|level_chunk|subchunk|network_chunk|set_time|update_attributes|set_entity_data|add_entity|move_entity|player_list|level_event|set_entity_motion/;
+    const onPkt = (pk) => { const n = pk?.data?.name; if (n && !skip.test(n)) seenAfterPlace[n] = (seenAfterPlace[n] || 0) + 1; };
+    alex.client.on('packet', onPkt);
     try { results.hands.placed = await alex.placeBlock(spot, 'dirt'); } catch (e) { results.hands.placeError = e.message; }
+    alex.client.off('packet', onPkt);
+    results.hands.serverReplied = seenAfterPlace;
     await sleep(500);
     results.hands.afterPlace = alex.blockAt(spot.x, spot.y, spot.z)?.name;
     try { results.hands.dug = await alex.dig(spot); } catch (e) { results.hands.digError = e.message; }

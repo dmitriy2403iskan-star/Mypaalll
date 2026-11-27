@@ -4,6 +4,7 @@ import { ActionError } from '../actions/util.js';
 import { house, simple, custom, billOfMaterials } from '../building/blueprints.js';
 import { fmt } from '../building/executor.js';
 import { blockArg, execAt, resolveBlock, nameArg } from './blocks.js';
+import { handsReady, collectBlocks, placeOne, breakOne, buildByHands } from './handsActions.js';
 
 // Bedrock: ladder facing_direction 2=north 3=south 4=west 5=east (куда «смотрит» лестница)
 const LADDER_FACING = { '-1,0,0': 5, '1,0,0': 4, '0,0,-1': 3, '0,0,1': 2 };
@@ -70,6 +71,10 @@ function originFor(pal, args) {
 
 async function build(pal, plan, args, title) {
   const origin = originFor(pal, args);
+  // выживание: строим руками из своего инвентаря, как в Java; креатив — быстро командами
+  if (pal.gameMode !== 'creative' && handsReady(pal) && args.use_commands !== true) {
+    return buildByHands(pal, plan, origin, title, { dryRun: args.dry_run });
+  }
   const cmds = opsToCommands(origin, plan.ops, pal.bot.version);
   const bill = billOfMaterials(plan.ops);
   if (args.dry_run) return `${title}: ${plan.summary}. Угол ${origin.x} ${origin.y} ${origin.z}. Блоков: ${fmt(bill)}. Команд: ${cmds.length}. (Bedrock: строю командами, материалы не тратятся.)`;
@@ -115,6 +120,44 @@ async function walkOrTp(pal, target, range, tpCommand, label) {
 }
 
 export default [
+  {
+    name: 'collect_blocks',
+    description: 'Добыть блоки руками (подойти, сломать, подобрать). Можно часть имени: "log" — любые брёвна. Лучший инструмент из хотбара берётся сам.',
+    parameters: { type: 'object', properties: { block: { type: 'string' }, count: { type: 'number' } }, required: ['block'] },
+    async run(pal, { block, count = 1 }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен — подожди пару секунд.');
+      return collectBlocks(pal, String(block).replace(/^minecraft:/, ''), count);
+    },
+  },
+  {
+    name: 'place_block',
+    description: 'Поставить блок из инвентаря (хотбара) руками по координатам.',
+    parameters: { type: 'object', properties: { block: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } }, required: ['block', 'x', 'y', 'z'] },
+    async run(pal, { block, x, y, z }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.');
+      return placeOne(pal, block, { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) });
+    },
+  },
+  {
+    name: 'break_block',
+    description: 'Сломать блок руками по координатам.',
+    parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } }, required: ['x', 'y', 'z'] },
+    async run(pal, { x, y, z }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.');
+      return breakOne(pal, { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) });
+    },
+  },
+  {
+    name: 'find_block',
+    description: 'Найти ближайшие блоки нужного типа и вернуть координаты.',
+    parameters: { type: 'object', properties: { block: { type: 'string' } }, required: ['block'] },
+    async run(pal, { block }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.');
+      const { findBlocksNear } = await import('./handsActions.js');
+      const list = findBlocksNear(pal.bot, String(block), 24, 5);
+      return list.length ? list.map((b) => `${b.name} ${b.x} ${b.y} ${b.z}`).join('\n') : `Рядом нет «${block}».`;
+    },
+  },
   {
     name: 'go_to_player',
     description: 'Подойти к игроку (пешком; если пути нет — телепорт командой).',

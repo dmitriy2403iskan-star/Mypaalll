@@ -208,6 +208,17 @@ export class BedrockBody extends EventEmitter {
     });
   }
 
+  /** Типы блоков вокруг (как в Java-снимке) — для контекста нейросети. */
+  nearbyBlockTypes() {
+    if (!this.world || !this.movement) return [];
+    const p = this.movement.position; const seen = new Map();
+    for (let dx = -8; dx <= 8; dx += 2) for (let dy = -3; dy <= 4; dy++) for (let dz = -8; dz <= 8; dz += 2) {
+      const b = this.world.blockAt(p.x + dx, p.y + dy, p.z + dz);
+      if (b && !/^(air|cave_air|void_air)$/.test(b.name)) seen.set(b.name, (seen.get(b.name) || 0) + 1);
+    }
+    return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([n]) => n);
+  }
+
   findPlayer(name) {
     if (!name) return null;
     const lower = name.toLowerCase();
@@ -227,12 +238,12 @@ export class BedrockBody extends EventEmitter {
       dimension: this.dimension,
       gameMode: this.gameMode,
       time: '—',
-      heldItem: null,
-      inventory: {},
+      heldItem: this.inventory ? this.inventory.nameOf(this.inventory.held()) : null,
+      inventory: this.inventory ? this.inventory.summary() : {},
       nearbyEntities: [...this.players].filter(([n]) => n !== this.username)
         .map(([name, p]) => ({ name, type: 'player', distance: dist(p.position) }))
         .sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9)),
-      nearbyBlocks: [],
+      nearbyBlocks: this.nearbyBlockTypes(),
     };
   }
 }
