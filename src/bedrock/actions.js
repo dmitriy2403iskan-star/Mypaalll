@@ -4,7 +4,8 @@ import { ActionError } from '../actions/util.js';
 import { house, simple, custom, billOfMaterials } from '../building/blueprints.js';
 import { fmt } from '../building/executor.js';
 import { blockArg, execAt, resolveBlock, nameArg } from './blocks.js';
-import { handsReady, collectBlocks, placeOne, breakOne, buildByHands, craftItem } from './handsActions.js';
+import { isHostileType as isHostileT } from './flayer/entities.js';
+import { handsReady, collectBlocks, placeOne, breakOne, buildByHands, craftItem, attackTarget, eatBest, giveTo, equipItem, sleepInBed, storeInChest, takeFromChest, smeltItem, pickupItems, findEntity, fight } from './handsActions.js';
 
 // Bedrock: ladder facing_direction 2=north 3=south 4=west 5=east (куда «смотрит» лестница)
 const LADDER_FACING = { '-1,0,0': 5, '1,0,0': 4, '0,0,-1': 3, '0,0,1': 2 };
@@ -210,7 +211,7 @@ export default [
   },
   {
     name: 'guard',
-    description: 'Охранять игрока: следовать и уничтожать враждебных мобов вокруг него. Выключается через stop.',
+    description: 'Охранять игрока: следовать за ним и бить враждебных мобов вокруг (руками, оружием). Выключается через stop.',
     parameters: { type: 'object', properties: { player: { type: 'string' } }, required: ['player'] },
     async run(pal, { player }) {
       pal.setMode('guard', player, { distance: 3 });
@@ -219,12 +220,25 @@ export default [
   },
   {
     name: 'clear_hostiles',
-    description: 'Уничтожить враждебных мобов в радиусе вокруг игрока или себя.',
+    description: 'Перебить враждебных мобов вокруг игрока или себя (руками, оружием из инвентаря).',
     parameters: { type: 'object', properties: { player: { type: 'string' }, radius: { type: 'number' } } },
     async run(pal, { player, radius = 16 }) {
       const r = Math.min(64, radius);
-      const res = await pal.bot.command(player ? execAt(pal.bot.version, player, `kill @e[family=monster,r=${r}]`) : `kill @e[family=monster,r=${r}]`);
-      return res.success ? `Мобы вокруг уничтожены (${res.output}).` : `Враждебных мобов рядом нет (${res.output}).`;
+      if (!handsReady(pal) || pal.gameMode === 'creative') {
+        const res = await pal.bot.command(player ? execAt(pal.bot.version, player, `kill @e[family=monster,r=${r}]`) : `kill @e[family=monster,r=${r}]`);
+        return res.success ? `Мобы вокруг уничтожены (${res.output}).` : `Враждебных мобов рядом нет (${res.output}).`;
+      }
+      const body = pal.bot;
+      const center = () => (player ? body.findPlayer(player)?.position : null) || body.movement.position;
+      let killed = 0;
+      for (let i = 0; i < 12 && !pal.interrupted; i++) {
+        const c = center();
+        const e = body.entities.nearest(c, (x) => isHostileT(x.type), r);
+        if (!e) break;
+        const res = await fight(pal, e, { timeoutMs: 20000 });
+        if (res.won) killed++;
+      }
+      return killed ? `Убил враждебных мобов: ${killed}.` : 'Враждебных мобов рядом нет.';
     },
   },
   {
@@ -266,14 +280,98 @@ export default [
   },
   {
     name: 'give_items',
-    description: 'Выдать игроку предметы командой /give (Bedrock-id предмета).',
+    description: 'Передать предметы игроку: подойти и выбросить ему (как в Java). В креативе выдаёт командой /give.',
     parameters: { type: 'object', properties: { player: { type: 'string' }, item: { type: 'string' }, count: { type: 'number' } }, required: ['player', 'item'] },
     async run(pal, { player, item, count = 1 }) {
+      const name = String(item).replace(/^minecraft:/, '');
+      if (handsReady(pal) && pal.bot.inventory.count(name)) {
+        const n = await giveTo(pal, player, name, count);
+        return `Отдал ${n} ${name} игроку ${player}.`;
+      }
+      if (pal.gameMode !== 'creative') throw new ActionError(`Нет ${name} в инвентаре — сначала добудь или скрафти.`);
       const b = resolveBlock(item, pal.bot.version);
       const r = await pal.bot.command(`give ${q(player)} ${b.id} ${Math.min(Math.max(1, count), 64 * 36)}${b.data ? ` ${b.data}` : ''}`);
       if (!r.success) throw new ActionError(`Не вышло: ${r.output}`);
       return `Выдал ${count} ${item} игроку ${player}.`;
     },
+  },
+  {
+    name: 'get_item',
+    description: 'Креатив: взять себе любой предмет (командой /give, нужны права оператора).',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number' } }, required: ['item'] },
+    async run(pal, { item, count = 1 }) {
+      const b = resolveBlock(item, pal.bot.version);
+      const r = await pal.bot.command(`give ${q(pal.bot.username)} ${b.id} ${Math.min(Math.max(1, count), 64 * 36)}${b.data ? ` ${b.data}` : ''}`);
+      if (!r.success) throw new ActionError(`Не вышло: ${r.output}`);
+      return `Взял ${count} ${item}.`;
+    },
+  },
+  {
+    name: 'drop_items',
+    description: 'Выбросить предметы из инвентаря.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number' } }, required: ['item'] },
+    async run(pal, { item, count }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.');
+      const n = await giveTo(pal, null, item, count);
+      return `Выбросил ${n} ${item}.`;
+    },
+  },
+  {
+    name: 'equip',
+    description: 'Взять предмет в руку или надеть броню.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, slot: { type: 'string', enum: ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet'] } }, required: ['item'] },
+    async run(pal, { item, slot }) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.');
+      return equipItem(pal, item, slot);
+    },
+  },
+  {
+    name: 'eat',
+    description: 'Поесть (лучшую еду из инвентаря).',
+    parameters: { type: 'object', properties: {} },
+    async run(pal) {
+      if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.');
+      if (pal.bot.food >= 20) return 'Я сыт.';
+      const ate = await eatBest(pal);
+      if (!ate) throw new ActionError(pal.bot.inventory.count ? 'Нет еды в инвентаре (или сервер не засчитал).' : 'Нет еды.');
+      return `Съел ${ate}. Сытость: ${Math.round(pal.bot.food)}/20.`;
+    },
+  },
+  {
+    name: 'sleep_in_bed',
+    description: 'Лечь спать в ближайшую кровать (только ночью).',
+    parameters: { type: 'object', properties: {} },
+    async run(pal) { if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.'); return sleepInBed(pal); },
+  },
+  {
+    name: 'attack',
+    description: 'Атаковать ближайшее существо по имени (zombie, cow, skeleton...) или "hostile" — ближайшего враждебного моба.',
+    parameters: { type: 'object', properties: { target: { type: 'string' } }, required: ['target'] },
+    async run(pal, { target }) { if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.'); return attackTarget(pal, target); },
+  },
+  {
+    name: 'store_in_chest',
+    description: 'Положить предметы в ближайший сундук. item="all" — всё, кроме инструментов, брони и еды.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number' } }, required: ['item'] },
+    async run(pal, { item, count }) { if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.'); return storeInChest(pal, item, count); },
+  },
+  {
+    name: 'take_from_chest',
+    description: 'Взять предметы из ближайшего сундука. Без item — просто посмотреть содержимое.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number' } } },
+    async run(pal, { item, count = 1 }) { if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.'); return takeFromChest(pal, item, count); },
+  },
+  {
+    name: 'smelt_item',
+    description: 'Переплавить предметы в печке (raw_iron → iron_ingot, sand → glass, beef → cooked_beef, cobblestone → stone). Печь найдётся рядом, будет поставлена или скрафчена.',
+    parameters: { type: 'object', properties: { item: { type: 'string' }, count: { type: 'number' } }, required: ['item'] },
+    async run(pal, { item, count = 1 }) { if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.'); return smeltItem(pal, item, count); },
+  },
+  {
+    name: 'pickup_items',
+    description: 'Подобрать лежащие на земле предметы вокруг.',
+    parameters: { type: 'object', properties: { radius: { type: 'number' } } },
+    async run(pal, { radius = 16 }) { if (!handsReady(pal)) throw new ActionError('Мир ещё не загружен.'); return pickupItems(pal, Math.min(32, radius)); },
   },
   {
     name: 'build_house',
@@ -350,7 +448,7 @@ export function startBedrockModes(pal) {
         if (target?.position && Math.hypot(target.position.x - me.x, target.position.z - me.z) > 48) {
           await body.command(execAt(body.version, mode.player, `tp @s ^1 ^ ^-${mode.distance || 2}`, body.username), 2500);
         }
-        if (mode.type === 'guard') await body.command(execAt(body.version, mode.player, 'kill @e[family=monster,r=12]'), 2500);
+        // охрана своим телом: мобов бьёт рефлекс (src/bedrock/reflex.js)
         return;
       }
       const target = body.findPlayer(mode.player);

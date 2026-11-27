@@ -240,6 +240,84 @@ export class Hands {
     return false;
   }
 
+  /** Ударить существо (как bot.attack): inventory_transaction item_use_on_entity. */
+  attack(entity) {
+    const pos = entity.position;
+    this.movement.lookAt({ x: pos.x, y: pos.y + 0.9, z: pos.z });
+    this.swing();
+    const e = this.eye();
+    const data = {
+      entity_runtime_id: entity.id, action_type: 'attack', hotbar_slot: this.inv.selected, hand: 'main_hand',
+      held_item: this.inv.held() || this.airItem(), player_pos: { x: e.x, y: e.y, z: e.z }, click_pos: { x: 0, y: 0, z: 0 },
+    };
+    const tr = this.md.protocol.types.Transaction[1].find((f) => f.name === 'transaction_data').type[1].fields.item_use_on_entity;
+    const fields = new Set(tr[1].map((f) => f.name));
+    for (const k of Object.keys(data)) if (!fields.has(k)) delete data[k];
+    try {
+      this.body.client.queue('inventory_transaction', { transaction: { legacy: { legacy_request_id: 0 }, transaction_type: 'item_use_on_entity', actions: [], transaction_data: data } });
+    } catch (err) { this.body.emit('flayerError', err); }
+  }
+
+  /** Пустая рука в формате версии. */
+  airItem() {
+    const t = this.md.protocol.types;
+    if (t.ItemV4) return { network_id: 0, count: 0, metadata: 0, has_stack_id: false, block_runtime_id: 0, extra: { has_nbt: 'false', can_place_on: [], can_destroy: [] } };
+    return { network_id: 0 };
+  }
+
+  /** Использовать предмет в воздух (еда, зелье): click_air. */
+  useInAir(viaAuth) {
+    const faceType = this.md.protocol.types.TransactionUseItem[1].find((f) => f.name === 'face')?.type;
+    this.useItem({ action_type: 'click_air', block_position: { x: 0, y: 0, z: 0 }, face: faceType === 'u8' ? 255 : -1, click_pos: { x: 0, y: 0, z: 0 } }, viaAuth);
+  }
+
+  /** Отпустить предмет (доесть/выстрелить): inventory_transaction item_release. */
+  release(action = 'consume') {
+    const e = this.eye();
+    const data = { action_type: action, hotbar_slot: this.inv.selected, held_item: this.inv.held() || this.airItem(), head_pos: { x: e.x, y: e.y, z: e.z }, hand: 'main_hand' };
+    const tr = this.md.protocol.types.Transaction[1].find((f) => f.name === 'transaction_data').type[1].fields.item_release;
+    const fields = new Set(tr[1].map((f) => f.name));
+    for (const k of Object.keys(data)) if (!fields.has(k)) delete data[k];
+    try {
+      this.body.client.queue('inventory_transaction', { transaction: { legacy: { legacy_request_id: 0 }, transaction_type: 'item_release', actions: [], transaction_data: data } });
+    } catch (err) { this.body.emit('flayerError', err); }
+  }
+
+  /** Съесть предмет из хотбара. Возвращает true, если сытость выросла. */
+  async eat(slot) {
+    this.inv.select(slot);
+    await sleep(150);
+    const before = this.body.food;
+    const name = this.inv.nameOf(this.inv.held());
+    // настоящий клиент: начать использование, держать ~1.6 с, затем сервер засчитывает
+    for (const viaAuth of [this.viaAuthInput(), !this.viaAuthInput()]) {
+      this.useInAir(viaAuth);
+      await sleep(1800);
+      if (this.body.food > before || this.inv.nameOf(this.inv.held()) !== name || (this.inv.held()?.count || 0) < (this.inv.slots[slot]?.count || 0)) return true;
+      this.useInAir(viaAuth); // повторный клик после длительности — так завершают еду некоторые сервера
+      await sleep(300);
+      this.release('consume');
+      await sleep(700);
+      if (this.body.food > before) return true;
+    }
+    return this.body.food > before;
+  }
+
+  /** Нажать на блок (кровать, сундук, печь, рычаг, дверь) пустым кликом. */
+  async useBlock(pos) {
+    const face = this.faceToward(pos);
+    this.movement.lookAt({ x: pos.x + 0.5, y: pos.y + 0.5, z: pos.z + 0.5 });
+    await sleep(120);
+    const [fx, fy, fz] = FACE_VEC[face];
+    const click = { x: 0.5 + fx * 0.5, y: 0.5 + fy * 0.5, z: 0.5 + fz * 0.5 };
+    if (this.itemUseActions && this.viaAuthInput()) {
+      this.movement.blockActions.push({ action: 'start_item_use_on', position: { ...pos }, face });
+      setTimeout(() => this.movement.blockActions.push({ action: 'stop_item_use_on', position: { ...pos }, face }), 100);
+    }
+    this.useItem({ action_type: 'click_block', block_position: pos, face, click_pos: click, block_runtime_id: this.runtimeIdOf(pos) });
+    this.swing();
+  }
+
   viaAuthInput() {
     if (this.movement.authority === 'client') return false;
     const [a, b] = String(this.body.version).split('.').map(Number);
@@ -251,7 +329,7 @@ export class Hands {
     const e = this.eye();
     const data = {
       action_type: d.action_type, trigger_type: 'player_input', block_position: d.block_position, face: d.face,
-      hotbar_slot: this.inv.selected, hand: 'main_hand', held_item: this.inv.held() || { network_id: 0 },
+      hotbar_slot: this.inv.selected, hand: 'main_hand', held_item: this.inv.held() || this.airItem(),
       player_pos: { x: e.x, y: e.y, z: e.z }, click_pos: d.click_pos || { x: 0.5, y: 0.5, z: 0.5 },
       block_runtime_id: d.block_runtime_id || 0, client_prediction: 'success', client_cooldown_state: 'off',
     };

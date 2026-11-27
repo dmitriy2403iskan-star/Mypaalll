@@ -247,9 +247,13 @@ export class BedrockBody extends EventEmitter {
       time: '—',
       heldItem: this.inventory ? this.inventory.nameOf(this.inventory.held()) : null,
       inventory: this.inventory ? this.inventory.summary() : {},
-      nearbyEntities: [...this.players].filter(([n]) => n !== this.username)
-        .map(([name, p]) => ({ name, type: 'player', distance: dist(p.position) }))
-        .sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9)),
+      nearbyEntities: this.entities && this.movement
+        ? [...[...this.players].filter(([n]) => n !== this.username).map(([name, p]) => ({ name, type: 'player', distance: dist(p.position) })),
+          ...this.entities.list(this.movement.position).filter((e) => e.type !== 'player')]
+          .sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9)).slice(0, 15)
+        : [...this.players].filter(([n]) => n !== this.username)
+          .map(([name, p]) => ({ name, type: 'player', distance: dist(p.position) }))
+          .sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9)),
       nearbyBlocks: this.nearbyBlockTypes(),
     };
   }

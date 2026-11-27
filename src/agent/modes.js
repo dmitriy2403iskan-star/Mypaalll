@@ -46,11 +46,11 @@ export const MODES = {
   },
 };
 
-// Bedrock (команды): режим влияет на подсказки нейросети, но действия всё равно идут командами
+// Bedrock: у бота своё тело, правила те же, что в Java; команды — только в креативе или по прямой просьбе
 const BEDROCK_EXTRA = {
-  survival: '\n- Bedrock: ты действуешь командами, но в выживании не раздавай бесплатные предметы через give и не меняй режим игры, если игрок явно не попросил.',
-  creative: '\n- Bedrock: строй смело командами /fill и /setblock, раздавай предметы через give_items по просьбе.',
-  adventure: '\n- Bedrock: команды стройки (/fill, /setblock) в приключении работают только при включённых читах; уточни у игрока, можно ли.',
+  survival: '\n- Bedrock: всё делаешь руками, как игрок. Не раздавай бесплатные предметы командами и не меняй режим игры, если игрок явно не попросил.',
+  creative: '\n- Bedrock: get_item выдаёт предмет командой /give (нужны права оператора); стройка в креативе идёт командами /fill и /setblock.',
+  adventure: '',
   spectator: '',
 };
 
@@ -71,10 +71,6 @@ export function modeProfile(raw) {
 export function actionAllowed(name, raw, edition = 'java') {
   const p = modeProfile(raw);
   if (p.allowedOnly && !p.allowedOnly.includes(name)) return false;
-  // get_item через инвентарь креатива есть только в Java; в Bedrock для этого есть give_items
-  if (name === 'get_item' && edition === 'bedrock') return false;
-  // Bedrock действует командами: в приключении /fill и /setblock работают при читах — не блокируем
-  if (edition === 'bedrock' && normalizeMode(raw) === 'adventure') return true;
   return !(p.blocked || []).includes(name);
 }
 

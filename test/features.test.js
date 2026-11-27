@@ -196,9 +196,12 @@ test('Режимы игры: инструменты и правила завис
   // приключение: нельзя строить; наблюдатель: только движение и разговор
   assert.ok(!names('adventure').includes('build_house') && names('adventure').includes('attack'));
   assert.ok(!names('spectator').includes('attack') && names('spectator').includes('follow_player'));
-  // Bedrock: в приключении стройка командами разрешена, get_item нет
-  assert.ok(names('adventure', 'bedrock').includes('build_house'));
-  assert.ok(!names('creative', 'bedrock').includes('get_item'));
+  // Bedrock: правила те же, что в Java
+  assert.ok(!names('adventure', 'bedrock').includes('build_house') && names('adventure', 'bedrock').includes('attack'));
+  assert.ok(names('creative', 'bedrock').includes('get_item') && !names('survival', 'bedrock').includes('get_item'));
+  for (const a of ['attack', 'eat', 'equip', 'drop_items', 'give_items', 'sleep_in_bed', 'store_in_chest', 'take_from_chest', 'smelt_item', 'pickup_items']) {
+    assert.ok(names('survival', 'bedrock').includes(a), `в Bedrock есть ${a}`);
+  }
   assert.equal(normalizeMode('creative_spectator'), 'spectator');
   assert.equal(normalizeMode(1), 'creative');
   assert.equal(modeProfile('creative').reflex.eat, false);

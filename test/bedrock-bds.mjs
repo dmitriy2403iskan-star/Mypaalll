@@ -209,6 +209,49 @@ try {
     await sleep(500);
     log('крафт:', JSON.stringify(results.craft));
     log('верстак в руке:', results.craft.tableItem, 'окно:', results.craft.windowOpen, 'сервер:', JSON.stringify(results.craft.tablePlaceReplied), 'нарушение:', alex.lastViolation);
+
+    // ---- КАК В JAVA: еда, броня, отдать игроку, сундук, бой, печь — всё без команд ----
+    const J = (results.java = {});
+    const H = await import('../src/bedrock/handsActions.js');
+    const step = async (name, fn) => {
+      try { J[name] = String(await fn()); } catch (e) { J[name] = `ОШИБКА: ${e.message}`; }
+      log('как в Java:', name, '→', J[name]);
+    };
+    for (const g of ['bread 6', 'iron_helmet 1', 'stone_sword 1', 'cobblestone 2', 'coal 2', 'furnace 1']) await alex.command(`give Alex ${g}`, 6000);
+    await sleep(1500);
+    // еда: сначала проголодаться (эффект голода), потом поесть
+    await alex.command('effect Alex hunger 20 255', 6000);
+    for (let k = 0; k < 20 && alex.food > 15; k++) await sleep(500);
+    await alex.command('effect Alex clear', 6000);
+    J.foodBefore = alex.food;
+    await step('eat', async () => { const f = await H.eatBest(pal); if (!f) throw new Error(`не засчитано, сытость ${alex.food}`); return `${f}, сытость ${alex.food}`; });
+    J.foodAfter = alex.food;
+    await step('equip', () => H.equipItem(pal, 'iron_helmet'));
+    // отдать игроку: Steve должен подобрать
+    const steveBread0 = steve.inventory.count('bread');
+    await step('give', async () => `${await H.giveTo(pal, 'Steve', 'bread', 2)} шт.`);
+    for (let k = 0; k < 10 && steve.inventory.count('bread') <= steveBread0; k++) await sleep(500);
+    J.steveGotBread = steve.inventory.count('bread') - steveBread0;
+    // сундук рядом
+    const mp = alex.movement.position;
+    const chestAt = { x: Math.floor(mp.x) - 2, y: Math.floor(mp.y), z: Math.floor(mp.z) };
+    await alex.command(`setblock ${chestAt.x} ${chestAt.y} ${chestAt.z} chest`, 6000);
+    await sleep(800);
+    const dirt0 = alex.inventory.count('dirt');
+    await step('store', () => H.storeInChest(pal, 'dirt', 3));
+    J.dirtStored = dirt0 - alex.inventory.count('dirt');
+    await step('take', () => H.takeFromChest(pal, 'dirt', 2));
+    J.dirtBack = alex.inventory.count('dirt') - (dirt0 - J.dirtStored);
+    // бой: свинья рядом
+    const mp2 = alex.movement.position;
+    await alex.command(`summon pig ${Math.floor(mp2.x) + 2} ${Math.floor(mp2.y)} ${Math.floor(mp2.z) + 1}`, 6000);
+    await sleep(1500);
+    J.pigSeen = Boolean(H.findEntity(alex, 'pig', 16));
+    await step('attack', () => H.attackTarget(pal, 'pig'));
+    // печь: булыжник → камень
+    await step('smelt', () => H.smeltItem(pal, 'cobblestone', 1));
+    J.stone = alex.inventory.count('stone');
+    log('как в Java:', JSON.stringify(J));
   }
   alex.quit(); steve.quit();
 } catch (e) {
@@ -227,7 +270,16 @@ try {
   // крафт засчитывается, если появились доски (2x2) и кирка (3x3 у верстака)
   const craftOk = !results.nativeReady || (results.craft?.pickaxe >= 1 && /Скрафтил/.test(String(results.craft?.oak_planks)));
   results.craftOk = craftOk;
-  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && handsOk && craftOk && !results.error;
+  // «как в Java»: каждое умение засчитывается по наблюдаемому результату
+  const J = results.java || {};
+  const javaChecks = !results.nativeReady ? {} : {
+    eat: J.foodAfter > J.foodBefore, equip: /Экипировал/.test(J.equip || ''), give: J.steveGotBread >= 1,
+    store: J.dirtStored >= 3, take: J.dirtBack >= 2, attack: /Победил/.test(J.attack || ''), smelt: J.stone >= 1,
+  };
+  results.javaChecks = javaChecks;
+  const javaOk = Object.values(javaChecks).every(Boolean);
+  log('проверки «как в Java»:', JSON.stringify(javaChecks));
+  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && handsOk && craftOk && javaOk && !results.error;
   log(ok ? 'ВСЁ OK' : 'ЕСТЬ ОШИБКИ');
   setTimeout(() => process.exit(ok ? 0 : 1), 500);
 }

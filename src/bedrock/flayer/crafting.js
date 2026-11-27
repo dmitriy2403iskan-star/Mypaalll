@@ -67,6 +67,16 @@ export class Crafting {
       }
     });
     c.on('container_open', (p) => { this.window = { id: p.window_id, type: p.window_type, at: p.coordinates }; body.emit('containerOpen', this.window); });
+    // содержимое открытых контейнеров (сундук, печь): окно → слоты
+    this.containers = new Map();
+    const own = (w) => w === 'inventory' || w === 0 || w === 'armor' || w === 'offhand' || w === 'ui' || w === 119 || w === 120 || w === 124;
+    c.on('inventory_content', (p) => { if (!own(p.window_id)) { this.containers.set(String(p.window_id), [...(p.input || [])]); body.emit('containerContent', p.window_id); } });
+    c.on('inventory_slot', (p) => {
+      if (own(p.window_id)) return;
+      const arr = this.containers.get(String(p.window_id)) || [];
+      arr[p.slot] = p.item; this.containers.set(String(p.window_id), arr);
+      body.emit('containerSlot', p.window_id, p.slot);
+    });
     c.on('container_close', (p) => { if (this.window && String(this.window.id) === String(p.window_id)) this.window = null; });
   }
 
@@ -454,6 +464,95 @@ export class Crafting {
       if (ok) return true;
     }
     return opened;
+  }
+
+  // ------------------------------------------------------------ контейнеры (сундук, печь) и экипировка
+  /** Открыть блок-контейнер кликом; true — сервер открыл окно. */
+  async openBlock(pos) {
+    if (this.window && this.window.at && this.window.at.x === pos.x && this.window.at.y === pos.y && this.window.at.z === pos.z) return true;
+    this.closeWindow();
+    const opened = new Promise((resolve) => {
+      const t = setTimeout(() => { this.body.off('containerOpen', on); resolve(false); }, 2500);
+      const on = () => { clearTimeout(t); resolve(true); };
+      this.body.once('containerOpen', on);
+    });
+    await this.body.hands.useBlock(pos);
+    if (!(await opened)) return false;
+    // содержимое приходит сразу после открытия
+    for (let i = 0; i < 10 && !this.containers.has(String(this.window?.id)); i++) await sleep(100);
+    return true;
+  }
+
+  /** Предметы открытого контейнера: [{ slot, name, count, item }]. */
+  containerItems() {
+    const arr = this.containers.get(String(this.window?.id)) || [];
+    const inv = this.body.inventory;
+    return arr.map((it, slot) => (it?.network_id ? { slot, name: inv.nameOf(it), count: it.count, item: it } : null)).filter(Boolean);
+  }
+
+  /** Тип слота контейнера в запросе: сундук/бочка — container, печь — по номеру слота. */
+  containerSlotType(slot) {
+    const t = String(this.window?.type || '');
+    if (/furnace|smoker/.test(t)) {
+      const prefix = /blast/.test(t) ? 'blast_furnace_' : /smoker/.test(t) ? 'smoker_' : 'furnace_';
+      const name = ['ingredient', 'fuel', 'output'][slot] || 'ingredient';
+      const all = Object.values(this.types.ContainerSlotType[1].mappings);
+      return all.includes(prefix + name) ? prefix + name : `furnace_${name}`;
+    }
+    if (/shulker/.test(t)) return 'shulker';
+    return 'container';
+  }
+
+  /** Переложить count предметов между инвентарём и открытым контейнером. dir: 'in' | 'out'. */
+  async transfer(dir, invSlot, contSlot, count) {
+    const inv = this.body.inventory;
+    const cont = this.containers.get(String(this.window?.id)) || [];
+    const style = this.goodStyle || 'split';
+    const invInfo = this.slotInfo(this.invSlotType(invSlot, style), invSlot, inv.slots[invSlot]?.stack_id ?? 0);
+    const contInfo = this.slotInfo(this.containerSlotType(contSlot), contSlot, cont[contSlot]?.stack_id ?? 0);
+    const [source, destination] = dir === 'in' ? [invInfo, contInfo] : [contInfo, invInfo];
+    const resp = await this.send([this.action('place', { count, source, destination })]);
+    if (resp.status !== 'ok') return { ok: false, error: `сервер отклонил (${resp.status})` };
+    const from = dir === 'in' ? inv.slots[invSlot] : cont[contSlot];
+    const moved = { ...from, count };
+    const sub = (it) => (it && it.count > count ? { ...it, count: it.count - count } : null);
+    const add = (it) => (it?.network_id ? { ...it, count: it.count + count } : moved);
+    if (dir === 'in') { inv.slots[invSlot] = sub(inv.slots[invSlot]); cont[contSlot] = add(cont[contSlot]); } else { cont[contSlot] = sub(cont[contSlot]); inv.slots[invSlot] = add(inv.slots[invSlot]); }
+    this.containers.set(String(this.window?.id), cont);
+    const seen = this.applyResponse(resp);
+    for (const [type, slots] of Object.entries(seen)) {
+      if (/hotbar|inventory/.test(type)) continue;
+      for (const [sl, sid] of Object.entries(slots)) if (cont[sl] && sid !== undefined) cont[sl] = { ...cont[sl], stack_id: sid };
+    }
+    return { ok: true };
+  }
+
+  /** Выбросить предметы из слота инвентаря (как Q). */
+  async drop(slot, count) {
+    const inv = this.body.inventory;
+    const it = inv.slots[slot];
+    if (!it?.network_id) return { ok: false, error: 'слот пуст' };
+    const style = this.goodStyle || 'split';
+    const resp = await this.send([this.action('drop', { count, source: this.slotInfo(this.invSlotType(slot, style), slot, it.stack_id ?? 0), randomly: false })]);
+    if (resp.status !== 'ok') return { ok: false, error: `сервер отклонил (${resp.status})` };
+    inv.slots[slot] = it.count > count ? { ...it, count: it.count - count } : null;
+    this.applyResponse(resp);
+    return { ok: true };
+  }
+
+  /** Надеть броню / взять в левую руку: перенос в слот armor (0 голова … 3 ноги) или offhand. */
+  async wear(slot, where) {
+    const inv = this.body.inventory;
+    const it = inv.slots[slot];
+    if (!it?.network_id) return { ok: false, error: 'слот пуст' };
+    const style = this.goodStyle || 'split';
+    const dest = where === 'off-hand' ? this.slotInfo('offhand', 1, 0) : this.slotInfo('armor', { head: 0, torso: 1, legs: 2, feet: 3 }[where] ?? 0, 0);
+    const resp = await this.send([this.action('place', { count: 1, source: this.slotInfo(this.invSlotType(slot, style), slot, it.stack_id ?? 0), destination: dest })]);
+    if (resp.status !== 'ok') return { ok: false, error: `сервер отклонил (${resp.status})` };
+    inv.slots[slot] = it.count > 1 ? { ...it, count: it.count - 1 } : null;
+    this.applyResponse(resp);
+    (this.body.worn ||= {})[where] = inv.nameOf(it);
+    return { ok: true };
   }
 
   closeWindow() {

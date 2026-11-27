@@ -16,6 +16,7 @@ import { RecipeDB } from '../knowledge/recipes.js';
 import { LimitExhaustedError } from '../llm/usage.js';
 import { BedrockBody } from '../bedrock/body.js';
 import { startBedrockModes } from '../bedrock/actions.js';
+import { BedrockReflex } from '../bedrock/reflex.js';
 import minecraftData from 'minecraft-data';
 import { checkVersion, supportedVersions } from '../versions.js';
 import { modeProfile, normalizeMode } from './modes.js';
@@ -118,7 +119,8 @@ export class Pal extends EventEmitter {
       this.status = 'online';
       if (bedrock) {
         this.stopModes = startBedrockModes(this);
-        this.log('system', `В мире Bedrock! Версия ${bot.version || '?'}. Для действий нужны читы и права оператора.`);
+        if (bot.nativeReady) this.reflex = new BedrockReflex(this);
+        this.log('system', `В мире Bedrock! Версия ${bot.version || '?'}. Бот действует руками, как игрок; команды нужны только в креативе.`);
         const warn = checkVersion('bedrock', bot.version);
         if (warn) this.log('error', warn);
       } else {
