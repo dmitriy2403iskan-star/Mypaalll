@@ -31,7 +31,8 @@ function connect(name) {
 let server;
 try {
   log(`скачиваю и запускаю BDS ${version} в ${root}`);
-  server = await bds.startServerAndWait2(version, 180000, { root, path: root, 'server-port': port, 'server-portv6': port + 1 });
+  // плоский мир — одинаковая проверка ходьбы на всех версиях (BDS читает level-type, а не level-generator)
+  server = await bds.startServerAndWait2(version, 180000, { root, path: root, 'server-port': port, 'server-portv6': port + 1, 'level-type': 'FLAT' });
   log('BDS запущен');
 
   const alex = await connect('Alex');

@@ -147,6 +147,14 @@ export class Movement {
       if (pk.delta) this.fake.entity.velocity = new Vec3(pk.delta.x, pk.delta.y, pk.delta.z);
       this.corrections = (this.corrections || 0) + 1;
     });
+    // новые серверы (1.21.20+) держат игрока неподвижным, пока клиент не сообщит о конце загрузочного экрана
+    try {
+      const t = require('minecraft-data')(`bedrock_${this.body.version}`).protocol.types;
+      if (t.packet_serverbound_loading_screen) {
+        this.client.queue('serverbound_loading_screen', { type: 1 }); // начало
+        setTimeout(() => { try { this.client.queue('serverbound_loading_screen', { type: 2 }); } catch { /* */ } }, 300); // конец
+      }
+    } catch { /* нет данных версии */ }
     this.timer = setInterval(() => this.onTick(), 50);
   }
 
