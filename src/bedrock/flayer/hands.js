@@ -199,6 +199,12 @@ export class Hands {
     return this.waitBlock(target, (b) => b.name !== 'air' && !/water/.test(b.name), 2500);
   }
 
+  viaAuthInput() {
+    if (this.movement.authority === 'client') return false;
+    const [a, b] = String(this.body.version).split('.').map(Number);
+    return a > 1 || b >= 19;
+  }
+
   /** inventory_transaction item_use с полями под версию. */
   useItem(d) {
     const e = this.eye();
@@ -210,6 +216,11 @@ export class Hands {
     };
     const fields = new Set(this.md.protocol.types.TransactionUseItem[1].map((f) => f.name));
     for (const k of Object.keys(data)) if (!fields.has(k)) delete data[k];
+    // 1.19+ с серверной проверкой движения: использование предмета принимается только внутри player_auth_input
+    if (this.viaAuthInput()) {
+      this.movement.itemInteract = { legacy: { legacy_request_id: 0 }, actions: [], data };
+      return;
+    }
     try {
       this.body.client.queue('inventory_transaction', {
         transaction: { legacy: { legacy_request_id: 0 }, transaction_type: 'item_use', actions: [], transaction_data: data },
