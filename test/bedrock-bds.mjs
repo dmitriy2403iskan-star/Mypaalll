@@ -281,7 +281,13 @@ try {
     J.pigSeen = Boolean(H.findEntity(alex, 'pig', 16));
     await step('attack', () => H.attackTarget(pal, 'pig'));
     // печь: булыжник → камень
+    const smeltPk = {}; const onSP = (pk) => { const n = pk?.data?.name; if (n && !skip.test(n)) smeltPk[n] = (smeltPk[n] || 0) + 1; };
+    alex.client.on('packet', onSP);
+    const furnaceBefore = H.findBlocksNear(alex, 'furnace', 24, 3).map((b) => b.name).join(',');
     await step('smelt', () => H.smeltItem(pal, 'cobblestone', 1));
+    alex.client.off('packet', onSP);
+    J.smeltPackets = smeltPk; J.furnaceBefore = furnaceBefore; J.furnaceAfter = H.findBlocksNear(alex, 'furnace', 24, 3).map((b) => `${b.name}@${b.x},${b.y},${b.z}`).join(',');
+    J.lastViolation = alex.lastViolation;
     await alex.inventory.resync();
     J.stone = alex.inventory.count('stone');
     log('как в Java:', JSON.stringify(J));
