@@ -1,0 +1,37 @@
+name: Java (настоящий сервер)
+
+on:
+  push:
+    branches: ['**']
+    paths: ['src/actions/**', 'src/minecraft/**', 'src/agent/**', 'src/knowledge/**', 'src/reflex/**', 'test/java-*.mjs', '.github/workflows/java-real.yml', 'package.json']
+  workflow_dispatch:
+
+concurrency:
+  group: java-real-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: '1.16.5', java: '17' }
+          - { version: '1.19.4', java: '17' }
+          - { version: '1.20.4', java: '17' }
+          - { version: '1.21.4', java: '21' }
+          - { version: '26.1', java: '25' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - run: npm ci --no-audit --no-fund
+      - name: Java-бот против сервера Minecraft Java ${{ matrix.version }}
+        run: node --no-warnings test/java-server.mjs ${{ matrix.version }}
