@@ -20,11 +20,14 @@ export class BedrockWorld extends EventEmitter {
     this.Block = require('prismarine-block')(this.registry);
     this.modern = impl === '1.18';
     this.columns = new Map();
+    // диагностика: как приходит мир и были ли ошибки разбора
+    this.stats = { full: 0, request: 0, subRequested: 0, subSuccess: 0, subAir: 0, subOther: {}, errors: 0, lastError: null, counts: {} };
     this.dimension = 0;
     this.ready = false;
 
-    client.on('level_chunk', (p) => this.onLevelChunk(p).catch((e) => this.emit('error', e)));
-    client.on('subchunk', (p) => this.onSubChunk(p).catch((e) => this.emit('error', e)));
+    const fail = (e) => { this.stats.errors++; this.stats.lastError = String(e?.stack || e).slice(0, 400); this.emit('error', e); };
+    client.on('level_chunk', (p) => this.onLevelChunk(p).catch(fail));
+    client.on('subchunk', (p) => this.onSubChunk(p).catch(fail));
     client.on('update_block', (p) => this.onUpdateBlock(p));
     client.on('change_dimension', () => this.columns.clear());
   }
@@ -47,15 +50,19 @@ export class BedrockWorld extends EventEmitter {
     // sub_chunk_count: -1/-2 (как беззнаковое 2^32-1/2^32-2) — режим запроса подчанков
     let count = p.sub_chunk_count;
     if (count > 0x7fffffff) count -= 0x100000000;
+    this.stats.counts[count] = (this.stats.counts[count] || 0) + 1;
     if (count === -1 || count === -2) {
       if (this.modern) col.networkDecodeNoCache(p.payload, count); // тут только биомы
       this.columns.set(this.key(p.x, p.z), col);
       const top = count === -2 && typeof p.highest_subchunk_count === 'number' ? p.highest_subchunk_count : (col.maxCY - col.minCY);
       const requests = [];
       for (let i = 0; i < top; i++) requests.push({ x: 0, y: col.minCY + i, z: 0 });
+      this.stats.request++;
+      this.stats.subRequested += requests.length;
       this.client.queue('subchunk_request', this.subchunkRequest(p.x, p.z, requests));
       return;
     }
+    this.stats.full++;
     this.decodeFull(col, p.payload, count);
     this.columns.set(this.key(p.x, p.z), col);
     this.ready = true;
@@ -94,9 +101,13 @@ export class BedrockWorld extends EventEmitter {
       let col = this.columns.get(this.key(cx, cz));
       if (!col) { col = this.newColumn(cx, cz); this.columns.set(this.key(cx, cz), col); }
       if (e.result === 'success' && e.payload) {
+        this.stats.subSuccess++;
         await col.networkDecodeSubChunkNoCache(cy, e.payload);
       } else if (e.result === 'success_all_air') {
+        this.stats.subAir++;
         col.setSection(cy, undefined);
+      } else {
+        this.stats.subOther[e.result] = (this.stats.subOther[e.result] || 0) + 1;
       }
     }
     this.ready = true;

@@ -68,6 +68,16 @@ try {
     await alex.command(execAt(v, 'Steve', 'tp "Steve" ~8 ~ ~'), 6000);
     await sleep(3000); // чанки и позиции
     results.chunksLoaded = alex.world.columns.size;
+    results.worldStats = alex.world.stats;
+    // что бот «видит» в столбце под Steve: первые твёрдые блоки сверху вниз
+    const sp = alex.findPlayer('Steve')?.position;
+    if (sp) {
+      const col = [];
+      for (let y = Math.floor(sp.y) + 2; y >= Math.floor(sp.y) - 6; y--) { const b = alex.blockAt(sp.x, y, sp.z); col.push(`${y}:${b ? b.name : 'null'}`); }
+      results.columnUnderSteve = col.join(' ');
+      log('столбец под Steve:', results.columnUnderSteve);
+      log('мир:', JSON.stringify(results.worldStats));
+    }
     const target = alex.findPlayer('Steve')?.position;
     const from = alex.movement.position.clone();
     results.walk = { from: round3(from), target: round3(target) };
