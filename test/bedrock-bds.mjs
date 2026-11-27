@@ -165,12 +165,12 @@ try {
     results.hands.dropsSeen = alex.inventory.nearbyDrops(spot, 6).map((d) => d.name);
     const takers = [];
     const onTake = (p) => takers.push(String(p.target_runtime_entity_id ?? p.target) === String(alex.runtimeId) ? 'Alex' : 'другой');
-    alex.client.on('take_item_entity', onTake);
+    alex.client.on("take_item_entity", onTake);
     const { pickupDrops } = await import('../src/bedrock/handsActions.js');
     await pickupDrops({ bot: alex, interrupted: false }, spot);
     await sleep(1000);
     results.hands.dropsLeft = alex.inventory.nearbyDrops(spot, 6).length;
-    alex.client.off('take_item_entity', onTake);
+    alex.client.off("take_item_entity", onTake);
     results.hands.pickedBy = takers.join(',');
     results.hands.dirtAfter = alex.inventory.count('dirt');
     log('руки:', JSON.stringify(results.hands));
@@ -238,10 +238,16 @@ try {
     await step('equip', () => H.equipItem(pal, 'iron_helmet'));
     // отдать игроку: Steve должен подобрать
     const steveBread0 = steve.inventory.count('bread');
+    const dropLog = [];
+    const onAdd = (p) => { if (alex.inventory.nameOf(p.item) === 'bread') dropLog.push(`появился ${Math.round(p.position.x)},${Math.round(p.position.y)},${Math.round(p.position.z)}`); };
+    const onTake2 = (p) => dropLog.push(`подобрал ${String(p.target) === String(steve.runtimeId) || String(p.target) === String(alex.findPlayer('Steve')?.runtimeId) ? 'Steve' : String(p.target) === String(alex.runtimeId) ? 'Alex' : p.target}`);
+    alex.client.on('add_item_entity', onAdd); alex.client.on("take_item_entity", onTake2);
     await step('give', async () => `${await H.giveTo(pal, 'Steve', 'bread', 2)} шт.`);
     for (let k = 0; k < 10 && steve.inventory.count('bread') <= steveBread0; k++) await sleep(500);
     J.steveGotBread = steve.inventory.count('bread') - steveBread0;
     J.breadOnGround = [...alex.inventory.drops.values()].filter((d) => d.name === 'bread').length;
+    alex.client.off('add_item_entity', onAdd); alex.client.off("take_item_entity", onTake2);
+    J.dropLog = dropLog.join('; '); J.alexBread = alex.inventory.count('bread');
     // сундук рядом
     const mp = alex.movement.position;
     const chestAt = { x: Math.floor(mp.x) - 2, y: Math.floor(mp.y), z: Math.floor(mp.z) };

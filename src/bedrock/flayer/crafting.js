@@ -421,6 +421,16 @@ export class Crafting {
     if (from < 9) return from;
     let to = -1;
     for (let i = 0; i < 9; i++) if (!inv.slots[i]?.network_id) { to = i; break; }
+    // слоты рюкзака доступны серверу только при открытом инвентаре — открываем, как игрок (E)
+    const ownWindow = !this.window;
+    if (ownWindow) await this.openInventory();
+    try {
+      return await this.moveToHotbar(from, to);
+    } finally { if (ownWindow) this.closeWindow(); }
+  }
+
+  async moveToHotbar(from, to) {
+    const inv = this.body.inventory;
     const styles = this.goodStyle ? [this.goodStyle] : ['split', 'combined'];
     for (const style of styles) {
       const item = inv.slots[from];
