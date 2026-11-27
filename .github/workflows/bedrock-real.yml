@@ -37,7 +37,7 @@ jobs:
           # подробный сетевой лог — чтобы видеть, на каком шаге рвётся подключение
           DEBUG: ${{ matrix.version != '1.26.60' && 'raknet' || '' }}
       - name: Зонд пакетов рук (новейшая версия)
-        if: failure() && matrix.version == '1.26.60'
+        if: failure() && matrix.version == '1.26.60' && false
         continue-on-error: true
         run: node --no-warnings test/bedrock-probe.mjs ${{ matrix.version }} 2>&1 | grep -v raknet | tail -60
       - name: Сетевой лог (при ошибке)

@@ -269,7 +269,9 @@ export class Crafting {
     if (!this.plan(r, times)) return { ok: false, error: 'не хватает ингредиентов' };
     // до 1.17 у craft_recipe_auto другой формат — сервер рвёт соединение, поэтому только «руками» через сетку
     const [maj, min] = String(this.body.version).split('.').map(Number);
-    const all = maj === 1 && min < 17 ? ['grid'] : ['auto', 'grid'];
+    // 1.26.60+: craft_recipe_auto с новым форматом ингредиентов тоже рвёт соединение (проверено зондом) — только сетка
+    const modernAuto = this.actionSchema('craft_recipe_auto').find((f) => f.name === 'ingredients')?.type?.[1]?.type === 'RecipeIngredient2';
+    const all = (maj === 1 && min < 17) || modernAuto ? ['grid'] : ['auto', 'grid'];
     const methods = this.goodMethod ? [this.goodMethod, ...all.filter((m) => m !== this.goodMethod)] : all;
     const errors = [];
     for (const m of methods) {
