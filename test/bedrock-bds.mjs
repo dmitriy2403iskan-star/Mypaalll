@@ -31,8 +31,7 @@ function connect(name) {
 let server;
 try {
   log(`скачиваю и запускаю BDS ${version} в ${root}`);
-  // плоский мир — одинаковая проверка ходьбы на всех версиях (BDS читает level-type, а не level-generator)
-  server = await bds.startServerAndWait2(version, 180000, { root, path: root, 'server-port': port, 'server-portv6': port + 1, 'level-type': 'FLAT' });
+  server = await bds.startServerAndWait2(version, 180000, { root, path: root, 'server-port': port, 'server-portv6': port + 1 });
   log('BDS запущен');
 
   const alex = await connect('Alex');
@@ -65,6 +64,9 @@ try {
   // подготовка командами: Alex рядом со Steve, затем Steve отходит на 8 блоков
   results.nativeReady = Boolean(alex.nativeReady);
   if (alex.nativeReady) {
+    // площадка под ногами: тест не зависит от рельефа (холмы, овраги, вода)
+    await alex.command(execAt(v, 'Steve', 'fill ~-3 ~-1 ~-3 ~12 ~-1 ~3 stone'), 6000);
+    await alex.command(execAt(v, 'Steve', 'fill ~-3 ~ ~-3 ~12 ~3 ~3 air'), 6000);
     await alex.command(execAt(v, 'Steve', 'tp @s ~ ~ ~', 'Alex'), 6000);
     await alex.command(execAt(v, 'Steve', 'tp Steve ~8 ~ ~'), 6000);
     await sleep(3000); // чанки и позиции
