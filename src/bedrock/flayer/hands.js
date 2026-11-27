@@ -99,6 +99,8 @@ export class Hands {
     this.inv = inventory;
     this.serverAuthBreaking = Boolean(startGame?.server_authoritative_block_breaking);
     this.md = require('minecraft-data')(`bedrock_${body.version}`);
+    // 1.19+: настоящий клиент сообщает начало/конец использования предмета на блоке — без этого сервер не ставит блок
+    this.itemUseActions = Object.values(this.md.protocol.types.Action?.[1]?.mappings || {}).includes('start_item_use_on');
   }
 
   eye() { const p = this.movement.position; return new Vec3(p.x, p.y + EYE, p.z); }
@@ -190,6 +192,10 @@ export class Hands {
     await sleep(80);
     this.movement.lookAt({ x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 });
     const [fx, fy, fz] = FACE_VEC[face];
+    if (this.itemUseActions) {
+      this.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face });
+      setTimeout(() => this.movement.blockActions.push({ action: 'stop_item_use_on', position: { ...ref }, face }), 100);
+    }
     this.useItem({
       action_type: 'click_block', block_position: ref, face,
       click_pos: { x: 0.5 + fx * 0.5, y: 0.5 + fy * 0.5, z: 0.5 + fz * 0.5 },
