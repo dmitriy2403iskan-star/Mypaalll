@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { loadBedrockProtocol } from './protocol.js';
+import { attachFlayer } from './flayer/index.js';
 import { DATA_DIR } from '../config.js';
 
 const require = createRequire(import.meta.url);
@@ -57,6 +58,7 @@ export class BedrockBody extends EventEmitter {
       // RakNet в основном потоке: в worker-потоке не действует заплатка протокола (см. protocol.js),
       // и на телефоне лишний поток только тратит память
       useRaknetWorkers: false,
+      viewDistance: 6, // чанков вокруг — достаточно для поиска пути, бережём память телефона
     };
     if (o.version) options.version = o.version;
     if (o.realm) { options.realms = { realmName: o.realm }; delete options.host; delete options.port; }
@@ -115,6 +117,8 @@ export class BedrockBody extends EventEmitter {
     c.on('disconnect', (p) => this.emit('kicked', p?.message || p?.reason || 'disconnect'));
     c.on('error', (e) => this.emit('error', e));
     c.on('close', () => this.end('closed'));
+    // собственное «тело» без команд: мир, физика, поиск пути (можно выключить: nativeMovement=false)
+    if (o.nativeMovement !== false) attachFlayer(this);
   }
 
   setGameMode(raw) {
@@ -128,6 +132,7 @@ export class BedrockBody extends EventEmitter {
   end(reason) {
     if (this.ended) return;
     this.ended = true;
+    this.movement?.stop();
     for (const { resolve, timer } of this.pending.values()) { clearTimeout(timer); resolve({ success: false, output: 'disconnected' }); }
     this.pending.clear();
     this.emit('end', reason);

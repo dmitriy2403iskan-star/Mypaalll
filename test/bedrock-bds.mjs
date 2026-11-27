@@ -16,6 +16,7 @@ const port = 19140;
 const results = { version };
 const log = (...a) => console.log('[test]', ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const round3 = (p) => (p ? { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2) } : null);
 
 function connect(name) {
   return new Promise((resolve, reject) => {
@@ -58,6 +59,37 @@ try {
   }
   await sleep(1000);
   results.positionAfterTp = alex.snapshot().position;
+
+  // ---- ХОДЬБА БЕЗ КОМАНД (собственное тело) ----
+  // подготовка командами: Alex рядом со Steve, затем Steve отходит на 8 блоков
+  results.nativeReady = Boolean(alex.nativeReady);
+  if (alex.nativeReady) {
+    await alex.command(execAt(v, 'Steve', 'tp @s ~ ~ ~'), 6000);
+    await alex.command(execAt(v, 'Steve', 'tp "Steve" ~8 ~ ~'), 6000);
+    await sleep(3000); // чанки и позиции
+    results.chunksLoaded = alex.world.columns.size;
+    const target = alex.findPlayer('Steve')?.position;
+    const from = alex.movement.position.clone();
+    results.walk = { from: round3(from), target: round3(target) };
+    if (target) {
+      const t0 = Date.now();
+      try {
+        await alex.goto(target, 1.8, 25000);
+        results.walk.arrived = true;
+      } catch (e) { results.walk.error = e.message; }
+      results.walk.seconds = (Date.now() - t0) / 1000;
+      await sleep(1500);
+      // главное: где Alex с точки зрения СЕРВЕРА — Steve видит его позицию из пакетов сервера
+      const alexSeen = steve.findPlayer('Alex')?.position;
+      const steveSelf = steve.snapshot().position;
+      results.walk.alexSeenBySteve = round3(alexSeen);
+      results.walk.botThinks = round3(alex.movement.position);
+      results.walk.corrections = alex.movement.corrections || 0;
+      results.walk.serverDistToSteve = alexSeen && steveSelf ? Math.hypot(alexSeen.x - steveSelf.x, alexSeen.z - steveSelf.z) : null;
+      results.walk.walked = alexSeen ? Math.hypot(alexSeen.x - from.x, alexSeen.z - from.z) : null;
+      log('ходьба:', JSON.stringify(results.walk));
+    }
+  }
   alex.quit(); steve.quit();
 } catch (e) {
   results.error = e.stack || String(e);
@@ -65,7 +97,10 @@ try {
   console.log(JSON.stringify(results, null, 2));
   try { server?.kill(); } catch { /* */ }
   const cmdOk = Object.entries(results).filter(([k]) => k.startsWith('cmd:')).every(([, v]) => v.success);
-  const ok = results.spawn && results.chatReceived && cmdOk && !results.error;
+  // ходьба засчитывается, если сервер видит, что бот прошёл ≥5 блоков и стоит рядом со Steve
+  const walkOk = !results.nativeReady || (results.walk?.walked >= 5 && results.walk?.serverDistToSteve <= 3.5);
+  results.walkOk = walkOk;
+  const ok = results.spawn && results.chatReceived && cmdOk && walkOk && !results.error;
   log(ok ? 'ВСЁ OK' : 'ЕСТЬ ОШИБКИ');
   setTimeout(() => process.exit(ok ? 0 : 1), 500);
 }
