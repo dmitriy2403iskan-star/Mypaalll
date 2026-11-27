@@ -29,12 +29,24 @@ export class BedrockWorld extends EventEmitter {
     client.on('level_chunk', (p) => this.onLevelChunk(p).catch(fail));
     client.on('subchunk', (p) => this.onSubChunk(p).catch(fail));
     client.on('update_block', (p) => this.onUpdateBlock(p));
+    client.on('update_block_synced', (p) => this.onUpdateBlock(p));
+    // большие изменения (/fill, взрывы) в новых версиях приходят пачкой по подчанку
+    client.on('update_subchunk_blocks', (p) => {
+      for (const b of p.blocks || []) this.onUpdateBlock({ position: b.position, block_runtime_id: b.runtime_id, layer: 0 });
+    });
     client.on('change_dimension', () => this.columns.clear());
   }
 
   /** Вызывается с пакетом start_game: сетевые id блоков (по порядку или хэши) и измерение. */
   handleStartGame(p) {
     try { this.registry.handleStartGame({ ...p, itemstates: p.itemstates || [] }); } catch (e) { this.emit('error', e); }
+    // неизвестный сетевой id блока (новые/кастомные блоки) — считаем камнем, чтобы не терять весь подчанок
+    const map = this.registry.blocksByRuntimeId || {};
+    const stone = this.registry.blocksByName?.stone;
+    const fallback = stone ? { stateId: stone.defaultState ?? stone.minStateId, ...stone } : null;
+    if (fallback) {
+      this.registry.blocksByRuntimeId = new Proxy(map, { get: (t, k) => (k in t ? t[k] : (typeof k === 'string' && /^-?\d+$/.test(k) ? fallback : undefined)) });
+    }
     this.dimension = typeof p.dimension === 'number' ? p.dimension : ({ overworld: 0, nether: 1, the_end: 2 }[p.dimension] ?? 0);
   }
 
