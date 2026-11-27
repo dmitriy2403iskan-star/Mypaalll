@@ -57,7 +57,8 @@ export class BedrockWorld extends EventEmitter {
       if (this.modern) { try { col.networkDecodeNoCache(p.payload, -1); } catch { /* биомы не обязательны */ } }
       this.columns.set(this.key(p.x, p.z), col);
       const limited = (count === -2 || pollingNew) && typeof p.highest_subchunk_count === 'number';
-      const top = limited ? p.highest_subchunk_count : (col.maxCY - col.minCY);
+      // highest_subchunk_count — индекс верхнего подчанка ВКЛЮЧИТЕЛЬНО; берём с запасом (лишнее сервер отклонит)
+      const top = limited ? Math.min(p.highest_subchunk_count + 2, col.maxCY - col.minCY) : (col.maxCY - col.minCY);
       const requests = [];
       for (let i = 0; i < top; i++) requests.push({ x: 0, y: col.minCY + i, z: 0 });
       this.stats.request++;
