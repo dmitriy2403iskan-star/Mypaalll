@@ -46,7 +46,12 @@ try {
   results.chatReceived = await heard;
   log('Steve услышал:', results.chatReceived);
 
-  for (const cmd of ['time set day', 'tp @s 5 10 5', `execute at "Steve" run tp @s ^1 ^ ^-2`, 'fill 10 4 10 12 6 12 stone', 'setblock 10 7 10 oak_planks', 'give "Steve" torch 4']) {
+  // строим рядом со Steve (точка появления каждый раз разная, далёкие чанки не загружены)
+  const { execAt, blockArg } = await import('../src/bedrock/blocks.js');
+  const v = alex.version || version;
+  const cmds = ['time set day', execAt(v, 'Steve', 'tp @s ^1 ^ ^-2'), execAt(v, 'Steve', 'fill ~3 ~ ~3 ~5 ~2 ~5 stone'),
+    execAt(v, 'Steve', `setblock ~3 ~3 ~3 ${blockArg('oak_planks', v)}`), 'give "Steve" torch 4'];
+  for (const cmd of cmds) {
     const r = await alex.command(cmd, 6000);
     results[`cmd: ${cmd}`] = r;
     log(cmd, '→', r.success ? 'OK' : 'FAIL', r.output);

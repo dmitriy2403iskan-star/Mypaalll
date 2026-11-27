@@ -18,6 +18,28 @@ function patchRak() {
 }
 patchRak();
 
+// jsp-raknet всегда шлёт RakNet-протокол 10, а Bedrock с 1.19.30 требует 11 (старые — 10).
+// Чередуем 11 и 10 между попытками соединения — так подходит любой сервер 1.16 … новейший.
+function patchJspProtocol() {
+  try {
+    const Client = require('jsp-raknet/js/Client.js').default;
+    const Req = require('jsp-raknet/js/protocol/OpenConnectionRequest1.js').default;
+    if (Client.prototype.__mypalPatched) return;
+    Client.prototype.sendConnectionRequest = function sendConnectionRequest() {
+      this.__tries = (this.__tries || 0) + 1;
+      const protocol = this.__tries % 2 === 1 ? 11 : 10;
+      const packet = new Req();
+      packet.mtuSize = this.mtuSize;
+      packet.protocol = protocol;
+      packet.encode();
+      this.sendBuffer(packet.buffer);
+      this.emit('connecting', { mtuSize: packet.mtuSize, protocol });
+    };
+    Client.prototype.__mypalPatched = true;
+  } catch { /* jsp-raknet не установлен */ }
+}
+patchJspProtocol();
+
 let cached = null;
 export function loadBedrockProtocol() {
   if (cached) return cached;
