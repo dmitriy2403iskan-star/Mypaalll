@@ -22,7 +22,8 @@ patchRak();
 // Чередуем 11 и 10 между попытками соединения — так подходит любой сервер 1.16 … новейший.
 function patchJspProtocol() {
   try {
-    const Client = require('jsp-raknet/js/Client.js').default;
+    const clientMod = require('jsp-raknet/js/Client.js');
+    const Client = clientMod.Client || clientMod.default;
     const Req = require('jsp-raknet/js/protocol/OpenConnectionRequest1.js').default;
     if (Client.prototype.__mypalPatched) return;
     Client.prototype.sendConnectionRequest = function sendConnectionRequest() {
