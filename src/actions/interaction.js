@@ -34,7 +34,7 @@ export default [
       if (!have) throw new ActionError(`Нет ${item} в инвентаре.`);
       const target = findPlayer(bot, player);
       if (!target) throw new ActionError(`Не вижу ${player}.`);
-      await gotoPos(pal, target.position, 2.5, 60_000);
+      if (bot.entity.position.distanceTo(target.position) > 3) await gotoPos(pal, target.position, 2.5, 60_000);
       await bot.lookAt(target.position.offset(0, 1.0, 0));
       const n = Math.min(count, have);
       const id = itemByName(bot, item).id;
@@ -120,8 +120,15 @@ export default [
       if (weapon) await bot.equip(weapon, 'hand');
       bot.pvp.attack(entity);
       const t0 = Date.now();
-      while (entity.isValid && Date.now() - t0 < 30_000 && !pal.interrupted) await sleep(500);
+      while (entity.isValid && Date.now() - t0 < 20_000 && !pal.interrupted) await sleep(500);
       bot.pvp.stop();
+      // плагин PvP иногда «теряет» цель (моб отошёл, путь перестроился) — добиваем сами: подойти и бить
+      const t1 = Date.now();
+      while (entity.isValid && Date.now() - t1 < 15_000 && !pal.interrupted) {
+        if (bot.entity.position.distanceTo(entity.position) > 3) await gotoPos(pal, entity.position, 2, 4000).catch(() => {});
+        else { await bot.lookAt(entity.position.offset(0, entity.height / 2, 0)).catch(() => {}); bot.attack(entity); }
+        await sleep(600);
+      }
       return entity.isValid ? `Бой с ${target} прерван.` : `Победил ${target}.`;
     },
   },
