@@ -208,7 +208,7 @@ try {
     results.craft.inventory = alex.inventory.summary();
     await sleep(500);
     log('крафт:', JSON.stringify(results.craft));
-    log('верстак в руке:', results.craft.tableItem, 'окно:', results.craft.windowOpen, 'сервер:', JSON.stringify(results.craft.tablePlaceReplied));
+    log('верстак в руке:', results.craft.tableItem, 'окно:', results.craft.windowOpen, 'сервер:', JSON.stringify(results.craft.tablePlaceReplied), 'нарушение:', alex.lastViolation);
   }
   alex.quit(); steve.quit();
 } catch (e) {

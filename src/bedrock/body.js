@@ -119,6 +119,11 @@ export class BedrockBody extends EventEmitter {
       });
     });
     c.on('disconnect', (p) => this.emit('kicked', p?.message || p?.reason || 'disconnect'));
+    // сервер сообщает, какой наш пакет он не смог разобрать — полезно при новых версиях протокола
+    c.on('packet_violation_warning', (p) => {
+      this.lastViolation = JSON.stringify(p, (k, x) => (typeof x === 'bigint' ? String(x) : x));
+      this.emit('flayerError', new Error(`сервер отклонил пакет: ${this.lastViolation}`));
+    });
     c.on('error', (e) => this.emit('error', e));
     c.on('close', () => this.end('closed'));
     // собственное «тело» без команд: мир, физика, поиск пути (можно выключить: nativeMovement=false)
