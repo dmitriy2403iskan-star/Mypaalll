@@ -53,6 +53,15 @@ try {
   // строим рядом со Steve (точка появления каждый раз разная, далёкие чанки не загружены)
   const { execAt, blockArg } = await import('../src/bedrock/blocks.js');
   const v = alex.version || version;
+  // площадка высоко в воздухе: тест не зависит от рельефа (пещеры, вода, гравий), чанки спавна загружены
+  {
+    const p0 = alex.snapshot().position; const X = p0.x; const Z = p0.z;
+    await alex.command(`fill ${X - 8} 149 ${Z - 8} ${X + 16} 149 ${Z + 8} stone`, 6000);
+    await alex.command(`fill ${X - 8} 150 ${Z - 8} ${X + 16} 156 ${Z + 8} air`, 6000);
+    await alex.command(`tp Steve ${X} 150 ${Z}`, 6000);
+    await alex.command(`tp Alex ${X + 1} 150 ${Z}`, 6000);
+    await sleep(2500);
+  }
   const cmds = ['time set day', execAt(v, 'Steve', 'tp @s ^1 ^ ^-2', 'Alex'), execAt(v, 'Steve', 'fill ~3 ~1 ~3 ~5 ~3 ~5 glass'),
     execAt(v, 'Steve', `setblock ~3 ~3 ~3 ${blockArg('oak_planks', v)}`), 'give Steve torch 4'];
   for (const cmd of cmds) {
@@ -232,6 +241,7 @@ try {
     await step('give', async () => `${await H.giveTo(pal, 'Steve', 'bread', 2)} шт.`);
     for (let k = 0; k < 10 && steve.inventory.count('bread') <= steveBread0; k++) await sleep(500);
     J.steveGotBread = steve.inventory.count('bread') - steveBread0;
+    J.breadOnGround = [...alex.inventory.drops.values()].filter((d) => d.name === 'bread').length;
     // сундук рядом
     const mp = alex.movement.position;
     const chestAt = { x: Math.floor(mp.x) - 2, y: Math.floor(mp.y), z: Math.floor(mp.z) };

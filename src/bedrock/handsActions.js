@@ -124,6 +124,24 @@ export async function buildByHands(pal, plan, origin, title, { dryRun = false } 
   return `${title} — готово руками: ${plan.summary}. Поставлено ${placed}, выкопано ${dug}.${failed.length ? ` Не вышло ${failed.length}: ${failed.slice(0, 2).join('; ')}` : ''}`;
 }
 
+/** Поставить блок из инвентаря на свободное место рядом (не туда, где стоят игроки). Возвращает позицию. */
+export async function placeNear(pal, item) {
+  const body = pal.bot;
+  const me = body.movement.position;
+  const bx = Math.floor(me.x); const by = Math.floor(me.y); const bz = Math.floor(me.z);
+  let why = '';
+  const cells = [];
+  for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 1], [1, 2], [-2, -1], [-1, -2], [2, -1], [-1, 2], [1, -2], [-2, 1], [3, 0], [0, 3], [-3, 0], [0, -3]]) {
+    for (const dy of [0, 1, -1]) cells.push({ x: bx + dx, y: by + dy, z: bz + dz });
+  }
+  for (const c of cells) {
+    const here = body.blockAt(c.x, c.y, c.z); const up = body.blockAt(c.x, c.y + 1, c.z); const down = body.blockAt(c.x, c.y - 1, c.z);
+    if (!here || !AIR.test(here.name) || !down?.solid || (up && !AIR.test(up.name) && up.solid)) continue;
+    try { if (await body.placeBlock(c, item)) return c; why = 'сервер не подтвердил'; } catch (e) { why = e.message; }
+  }
+  throw new ActionError(`Не получилось поставить ${item} рядом${why ? `: ${why}` : ''}`);
+}
+
 /** Верстак рядом: найти, иначе поставить из инвентаря, иначе скрафтить из досок (как craft_item в Java). */
 async function ensureTable(pal) {
   const body = pal.bot;
@@ -131,17 +149,7 @@ async function ensureTable(pal) {
   if (!table) {
     if (!body.inventory.count('crafting_table')) await craftItem(pal, 'crafting_table', 1, { noTable: true });
     body.crafting.closeWindow();
-    let why = '';
-    const me = body.movement.position;
-    const bx = Math.floor(me.x); const by = Math.floor(me.y); const bz = Math.floor(me.z);
-    for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 1], [1, 2], [-2, -1], [-1, -2]]) {
-      const c = { x: bx + dx, y: by, z: bz + dz };
-      const here = body.blockAt(c.x, c.y, c.z); const down = body.blockAt(c.x, c.y - 1, c.z);
-      if (here && AIR.test(here.name) && down?.solid) {
-        try { if (await body.placeBlock(c, 'crafting_table')) { table = c; break; } why = 'сервер не подтвердил'; } catch (e) { why = e.message; }
-      }
-    }
-    if (!table) throw new ActionError(`Не получилось поставить верстак рядом${why ? `: ${why}` : ''}`);
+    table = await placeNear(pal, 'crafting_table');
   }
   await approach(pal, table, 3);
   if (!(await body.crafting.openTable(table))) throw new ActionError('Верстак не открылся');
@@ -292,8 +300,9 @@ export async function giveTo(pal, player, item, count) {
   if (player) {
     const p = body.findPlayer(player)?.position;
     if (!p) throw new ActionError(`Не вижу ${player}.`);
-    await body.goto(p, 2, 30000).catch((e) => { throw new ActionError(`Не дошёл до ${player}: ${e.message}`); });
-    body.movement.lookAt({ x: p.x, y: p.y + 1.2, z: p.z });
+    await body.goto(p, 1.6, 30000).catch((e) => { throw new ActionError(`Не дошёл до ${player}: ${e.message}`); });
+    const pp = body.findPlayer(player)?.position || p;
+    body.movement.lookAt({ x: pp.x, y: pp.y + 0.5, z: pp.z }); // бросаем под ноги игроку — он сам подберёт
     await sleep(150);
   }
   let left = Math.min(count ?? have, have);
@@ -411,13 +420,8 @@ export async function smeltItem(pal, item, count = 1) {
   let furnace = findBlocksNear(body, 'furnace', 24, 1)[0];
   if (!furnace) {
     if (!inv.count('furnace')) await craftItem(pal, 'furnace', 1);
-    const me = body.movement.position;
-    for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [2, 1], [1, 2]]) {
-      const c = { x: Math.floor(me.x) + dx, y: Math.floor(me.y), z: Math.floor(me.z) + dz };
-      const here = body.blockAt(c.x, c.y, c.z); const down = body.blockAt(c.x, c.y - 1, c.z);
-      if (here && AIR.test(here.name) && down?.solid) { try { if (await body.placeBlock(c, 'furnace')) { furnace = c; break; } } catch { /* следующая */ } }
-    }
-    if (!furnace) throw new ActionError('Не получилось поставить печь.');
+    cr.closeWindow();
+    furnace = await placeNear(pal, 'furnace');
   }
   await approach(pal, furnace, 3);
   if (!(await cr.openBlock(furnace))) throw new ActionError('Печь не открылась.');

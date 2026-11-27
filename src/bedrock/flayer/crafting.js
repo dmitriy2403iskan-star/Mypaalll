@@ -547,7 +547,12 @@ export class Crafting {
     if (!it?.network_id) return { ok: false, error: 'слот пуст' };
     const style = this.goodStyle || 'split';
     const dest = where === 'off-hand' ? this.slotInfo('offhand', 1, 0) : this.slotInfo('armor', { head: 0, torso: 1, legs: 2, feet: 3 }[where] ?? 0, 0);
-    const resp = await this.send([this.action('place', { count: 1, source: this.slotInfo(this.invSlotType(slot, style), slot, it.stack_id ?? 0), destination: dest })]);
+    // слоты брони доступны только при открытом инвентаре — как у игрока (E → перетащить)
+    const opened = await this.openInventory();
+    let resp;
+    try {
+      resp = await this.send([this.action('place', { count: 1, source: this.slotInfo(this.invSlotType(slot, style), slot, it.stack_id ?? 0), destination: dest })]);
+    } finally { if (opened || this.inventoryOpened) this.closeWindow(); }
     if (resp.status !== 'ok') return { ok: false, error: `сервер отклонил (${resp.status})` };
     inv.slots[slot] = it.count > 1 ? { ...it, count: it.count - 1 } : null;
     this.applyResponse(resp);
