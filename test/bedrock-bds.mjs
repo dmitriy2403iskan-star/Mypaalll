@@ -151,7 +151,8 @@ try {
   const walkOk = !results.nativeReady || (results.walk?.walked >= 5 && results.walk?.serverDistToSteve <= 3.5);
   results.walkOk = walkOk;
   // руки засчитываются, если СЕРВЕР подтвердил установку и ломание (мы видим его update_block)
-  const handsOk = !results.nativeReady || (results.hands?.afterPlace === 'dirt' && /air/.test(results.hands?.afterDig || ''));
+  // после ломания там воздух (или натекла вода) — главное, что сервер убрал землю
+  const handsOk = !results.nativeReady || (results.hands?.afterPlace === 'dirt' && results.hands?.afterDig && results.hands.afterDig !== 'dirt');
   results.handsOk = handsOk;
   const ok = results.spawn && results.chatReceived && cmdOk && walkOk && handsOk && !results.error;
   log(ok ? 'ВСЁ OK' : 'ЕСТЬ ОШИБКИ');

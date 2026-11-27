@@ -192,7 +192,9 @@ export class Hands {
     const [fx, fy, fz] = FACE_VEC[face];
     // смотрим прицелом в точку клика на грани опорного блока (сервер проверяет луч взгляда)
     const click = { x: 0.5 + fx * 0.5, y: 0.5 + fy * 0.5, z: 0.5 + fz * 0.5 };
-    this.movement.lookAt({ x: ref.x + click.x, y: ref.y + click.y, z: ref.z + click.z });
+    // 1.19+ проверяют луч взгляда в грань; старые серверы принимали взгляд в центр цели — так и оставляем
+    if (this.viaAuthInput()) this.movement.lookAt({ x: ref.x + click.x, y: ref.y + click.y, z: ref.z + click.z });
+    else this.movement.lookAt({ x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 });
     await sleep(120); // пусть сервер получит новый поворот головы до клика
     if (this.itemUseActions) {
       this.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face });
