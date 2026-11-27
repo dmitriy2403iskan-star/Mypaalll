@@ -65,7 +65,8 @@ export class BedrockBody extends EventEmitter {
     c.on('start_game', (p) => {
       this.runtimeId = p.runtime_entity_id;
       this.uniqueId = p.entity_id;
-      this.entity = { position: feet(p.player_position) };
+      const pos = feet(p.player_position);
+      this.entity = pos ? { position: pos } : { position: { x: p.player_position.x, y: 64, z: p.player_position.z }, unknownY: true };
       this.dimension = p.dimension || 'overworld';
       this.version = c.options?.version;
       // fallback = режим мира по умолчанию
@@ -130,19 +131,28 @@ export class BedrockBody extends EventEmitter {
   }
 
   onText(p) {
-    const name = p.source_name;
-    if (!name || name === this.username) return;
-    if (p.type === 'chat') this.emit('chat', name, p.message);
-    if (p.type === 'whisper') this.emit('whisper', name, p.message);
+    let name = p.source_name;
+    let msg = p.message;
+    let whisper = p.type === 'whisper';
+    // настоящий BDS часто шлёт чат как перевод: chat.type.text [ник, текст], личные — commands.message.display.incoming
+    if (p.type === 'translation' && Array.isArray(p.parameters)) {
+      if (/^chat\.type\.(text|announcement)$/.test(p.message)) { name = p.parameters[0]; msg = p.parameters[1]; }
+      else if (/^commands\.message\.display\.incoming$/.test(p.message)) { name = p.parameters[0]; msg = p.parameters[1]; whisper = true; }
+      else return;
+    } else if (p.type !== 'chat' && p.type !== 'whisper') return;
+    if (!name || name === this.username || msg === undefined) return;
+    name = String(name).replace(/§./g, '');
+    this.emit(whisper ? 'whisper' : 'chat', name, String(msg));
   }
 
   onMove(runtimeId, pos) {
     if (String(runtimeId) === String(this.runtimeId)) {
-      this.entity = { position: feet(pos) };
+      const f = feet(pos);
+      if (f) this.entity = { position: f };
       return;
     }
     const name = this.byRuntime.get(runtimeId) ?? [...this.byRuntime].find(([k]) => String(k) === String(runtimeId))?.[1];
-    if (name && this.players.has(name)) this.players.get(name).position = feet(pos);
+    if (name && this.players.has(name)) this.players.get(name).position = feet(pos) || this.players.get(name).position;
   }
 
   // ----------------------------------------------------------- API, похожее на mineflayer
@@ -219,5 +229,7 @@ export class BedrockBody extends EventEmitter {
 
 function feet(p) {
   if (!p) return null;
+  // y=32768 — «позиция ещё неизвестна» (сервер пришлёт настоящую после загрузки чанков)
+  if (p.y > 30000) return null;
   return { x: p.x, y: p.y - EYE, z: p.z };
 }
