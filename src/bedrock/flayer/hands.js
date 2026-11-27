@@ -189,16 +189,18 @@ export class Hands {
     if (!ref) throw new Error('Не к чему прикрепить блок');
     if (!this.inReach(target, 5.5)) throw new Error('Слишком далеко, подойди ближе');
     this.inv.select(slot);
-    await sleep(80);
-    this.movement.lookAt({ x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 });
     const [fx, fy, fz] = FACE_VEC[face];
+    // смотрим прицелом в точку клика на грани опорного блока (сервер проверяет луч взгляда)
+    const click = { x: 0.5 + fx * 0.5, y: 0.5 + fy * 0.5, z: 0.5 + fz * 0.5 };
+    this.movement.lookAt({ x: ref.x + click.x, y: ref.y + click.y, z: ref.z + click.z });
+    await sleep(120); // пусть сервер получит новый поворот головы до клика
     if (this.itemUseActions) {
       this.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face });
       setTimeout(() => this.movement.blockActions.push({ action: 'stop_item_use_on', position: { ...ref }, face }), 100);
     }
     this.useItem({
       action_type: 'click_block', block_position: ref, face,
-      click_pos: { x: 0.5 + fx * 0.5, y: 0.5 + fy * 0.5, z: 0.5 + fz * 0.5 },
+      click_pos: click,
       block_runtime_id: this.runtimeIdOf(ref),
     });
     this.swing();

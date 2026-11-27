@@ -110,7 +110,14 @@ try {
     results.hands.dirtBefore = alex.inventory.count('dirt');
     results.hands.inventory = alex.inventory.summary();
     const me = alex.movement.position;
-    const spot = { x: Math.floor(me.x) + 2, y: Math.floor(me.y), z: Math.floor(me.z) };
+    // ближайшая клетка: воздух, над ней воздух, снизу твёрдый блок, не там, где стоит бот
+    let spot = null;
+    for (const [dx, dz] of [[2, 0], [0, 2], [-2, 0], [0, -2], [2, 1], [1, 2], [2, -1], [-1, 2]]) {
+      const c = { x: Math.floor(me.x) + dx, y: Math.floor(me.y), z: Math.floor(me.z) + dz };
+      const here = alex.blockAt(c.x, c.y, c.z); const up = alex.blockAt(c.x, c.y + 1, c.z); const down = alex.blockAt(c.x, c.y - 1, c.z);
+      if (here?.name === 'air' && up?.name === 'air' && down?.solid) { spot = c; break; }
+    }
+    spot ||= { x: Math.floor(me.x) + 2, y: Math.floor(me.y), z: Math.floor(me.z) };
     results.hands.spot = spot;
     results.hands.spotBefore = alex.blockAt(spot.x, spot.y, spot.z)?.name;
     results.hands.below = alex.blockAt(spot.x, spot.y - 1, spot.z)?.name;
