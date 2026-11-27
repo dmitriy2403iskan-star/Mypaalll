@@ -52,7 +52,7 @@ try {
   const { execAt, blockArg } = await import('../src/bedrock/blocks.js');
   const v = alex.version || version;
   const cmds = ['time set day', execAt(v, 'Steve', 'tp @s ^1 ^ ^-2', 'Alex'), execAt(v, 'Steve', 'fill ~3 ~1 ~3 ~5 ~3 ~5 glass'),
-    execAt(v, 'Steve', `setblock ~3 ~3 ~3 ${blockArg('oak_planks', v)}`), 'give "Steve" torch 4'];
+    execAt(v, 'Steve', `setblock ~3 ~3 ~3 ${blockArg('oak_planks', v)}`), 'give Steve torch 4'];
   for (const cmd of cmds) {
     const r = await alex.command(cmd, 6000);
     results[`cmd: ${cmd}`] = r;
@@ -66,7 +66,7 @@ try {
   results.nativeReady = Boolean(alex.nativeReady);
   if (alex.nativeReady) {
     await alex.command(execAt(v, 'Steve', 'tp @s ~ ~ ~', 'Alex'), 6000);
-    await alex.command(execAt(v, 'Steve', 'tp "Steve" ~8 ~ ~'), 6000);
+    await alex.command(execAt(v, 'Steve', 'tp Steve ~8 ~ ~'), 6000);
     await sleep(3000); // чанки и позиции
     results.chunksLoaded = alex.world.columns.size;
     results.worldStats = alex.world.stats;

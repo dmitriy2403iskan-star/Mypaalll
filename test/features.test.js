@@ -176,10 +176,11 @@ test('Bedrock: старые версии — data-значения и стары
   assert.equal(blockArg('spruce_planks', '1.20.0'), 'planks ["wood_type"="spruce"]');
   assert.equal(blockArg('oak_planks', '1.26.60'), 'oak_planks');
   assert.equal(blockArg('stone_bricks', '1.26.60'), 'stone_bricks');
-  assert.equal(execAt('1.16.201', 'Steve', 'tp @s ~ ~ ~'), 'execute "Steve" ~ ~ ~ tp @s ~ ~ ~');
-  assert.equal(execAt('1.16.201', 'Steve', 'tp @s ^1 ^ ^-2', 'Alex'), 'execute "Steve" ~ ~ ~ tp "Alex" ^1 ^ ^-2');
-  assert.equal(execAt('1.26.60', 'Steve', 'tp @s ^1 ^ ^-2', 'Alex'), 'execute at "Steve" run tp @s ^1 ^ ^-2');
-  assert.equal(execAt('1.26.60', 'Steve', 'tp @s ~ ~ ~'), 'execute at "Steve" run tp @s ~ ~ ~');
+  assert.equal(execAt('1.16.201', 'Steve', 'tp @s ~ ~ ~'), 'execute Steve ~ ~ ~ tp @s ~ ~ ~');
+  assert.equal(execAt('1.16.201', 'Steve', 'tp @s ^1 ^ ^-2', 'Alex'), 'execute Steve ~ ~ ~ tp Alex ^1 ^ ^-2');
+  assert.equal(execAt('1.26.60', 'Steve', 'tp @s ^1 ^ ^-2', 'Alex'), 'execute at Steve run tp @s ^1 ^ ^-2');
+  assert.equal(execAt('1.26.60', 'Big Steve', 'tp @s ~ ~ ~'), 'execute at "Big Steve" run tp @s ~ ~ ~');
+  assert.equal(execAt('1.26.60', 'Steve', 'tp @s ~ ~ ~'), 'execute at Steve run tp @s ~ ~ ~');
 });
 
 test('Режимы игры: инструменты и правила зависят от выживания/креатива', async () => {

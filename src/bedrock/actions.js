@@ -3,12 +3,12 @@
 import { ActionError } from '../actions/util.js';
 import { house, simple, custom, billOfMaterials } from '../building/blueprints.js';
 import { fmt } from '../building/executor.js';
-import { blockArg, execAt, resolveBlock } from './blocks.js';
+import { blockArg, execAt, resolveBlock, nameArg } from './blocks.js';
 
 // Bedrock: ladder facing_direction 2=north 3=south 4=west 5=east (куда «смотрит» лестница)
 const LADDER_FACING = { '-1,0,0': 5, '1,0,0': 4, '0,0,-1': 3, '0,0,1': 2 };
 
-const q = (name) => `"${String(name).replace(/"/g, '')}"`;
+const q = (name) => nameArg(name);
 
 /** Сжимаем операции в команды: одинаковые блоки в ряд по z → один /fill. version — версия Bedrock-сервера. */
 export function opsToCommands(origin, ops, version) {

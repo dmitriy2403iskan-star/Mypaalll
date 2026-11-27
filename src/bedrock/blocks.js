@@ -58,11 +58,17 @@ export function blockArg(name, version, extraStates = {}, extraData = 0) {
 }
 
 /** Выполнить команду «от позиции игрока» в синтаксисе нужной версии. */
+/** Имя игрока для команды: простые ники без кавычек (старый Bedrock не находит "Ник" в кавычках), остальные — в кавычках. */
+export function nameArg(name) {
+  const n = String(name).replace(/"/g, '');
+  return /^[A-Za-z0-9_]+$/.test(n) ? n : `"${n}"`;
+}
+
 export function execAt(version, target, command, self) {
-  const t = `"${String(target).replace(/"/g, '')}"`;
+  const t = nameArg(target);
   if (version && cmpVersion(version, '1.19.50') < 0) {
     // в старом /execute исполнителем становится цель, и @s означает её — бота называем по имени
-    const cmd = self ? command.replace(/@s\b/g, `"${String(self).replace(/"/g, '')}"`) : command;
+    const cmd = self ? command.replace(/@s\b/g, nameArg(self)) : command;
     return `execute ${t} ~ ~ ~ ${cmd}`;
   }
   return `execute at ${t} run ${command}`;
