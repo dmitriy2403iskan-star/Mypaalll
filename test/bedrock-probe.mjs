@@ -27,24 +27,21 @@ function connect(name) {
 
 const air = { network_id: 0, count: 0, metadata: 0, has_stack_id: false, block_runtime_id: 0, extra: { has_nbt: 'false', can_place_on: [], can_destroy: [] } };
 
+// известные результаты для 1.26.60 (зонд рук): auth tx — ок, start_item_use_on — обрыв, ломание block_action — ок
 const variants = {
-  // поставить блок
-  'place: inventory_transaction': (b, ref, d) => b.hands.useItem(d, false),
-  'place: auth tx': (b, ref, d) => b.hands.useItem(d, true),
-  'place: auth tx + start/stop_item_use_on': (b, ref, d, face) => {
-    b.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face });
-    setTimeout(() => b.movement.blockActions.push({ action: 'stop_item_use_on', position: { ...ref }, face }), 100);
-    b.hands.useItem(d, true);
+  'craft: open_inventory': async (b) => { r_open(b); await b.crafting.openInventory(); },
+  'craft: move hotbar→inventory (place)': async (b) => {
+    const cr = b.crafting; const inv = b.inventory; const from = inv.findSlot('oak_log');
+    return cr.send([cr.action('place', { count: 1, source: cr.slotInfo('hotbar', from, inv.slots[from]?.stack_id), destination: cr.slotInfo('inventory', 20, 0) })]);
   },
-  'place: auth tx, held=air': (b, ref, d) => b.hands.useItem({ ...d }, true) || (b.movement.itemInteract && (b.movement.itemInteract.data.held_item = air)),
-  'place: only block_action start_item_use_on': (b, ref, d, face) => b.movement.blockActions.push({ action: 'start_item_use_on', position: { ...ref }, face }),
-  // сломать (сервер считает ломание сам)
-  'dig: block_action start/continue/stop': async (b, ref, d, face, target) => {
-    b.movement.blockActions.push({ action: 'start_break', position: target, face: 1 });
-    for (let i = 0; i < 20; i++) { await sleep(50); b.movement.blockActions.push({ action: 'continue_break', position: target, face: 1 }); }
-    b.movement.blockActions.push({ action: 'predict_break', position: target, face: 1 }, { action: 'stop_break', position: target, face: 1 });
+  'craft: move combined (hotbar_and_inventory)': async (b) => {
+    const cr = b.crafting; const inv = b.inventory; const from = inv.findSlot('oak_log');
+    return cr.send([cr.action('place', { count: 1, source: cr.slotInfo('hotbar_and_inventory', from, inv.slots[from]?.stack_id), destination: cr.slotInfo('hotbar_and_inventory', 20, 0) })]);
   },
+  'craft: grid planks': async (b) => { const r = b.crafting.recipesFor('oak_planks').find((x) => b.crafting.plan(x, 1)); return r ? b.crafting.craftGrid(r, false) : 'нет рецепта'; },
+  'craft: auto planks': async (b) => { const r = b.crafting.recipesFor('oak_planks').find((x) => b.crafting.plan(x, 1)); return r ? b.crafting.craftAuto(r, 1) : 'нет рецепта'; },
 };
+const r_open = () => {};
 
 const report = {};
 let server;
@@ -58,26 +55,18 @@ try {
     try {
       const b = await connect(nick);
       await sleep(2500);
-      await b.command(`gamemode creative ${nick}`, 4000); // ломание мгновенное, блок не кончится
-      await b.command(`give ${nick} dirt 16`, 4000);
-      const p = b.movement.position; const x = Math.floor(p.x) + 2; const y = Math.floor(p.y); const z = Math.floor(p.z);
-      await b.command(`fill ${x - 1} ${y - 1} ${z - 1} ${x + 1} ${y - 1} ${z + 1} stone`, 4000);
-      await b.command(`fill ${x} ${y} ${z} ${x} ${y + 2} ${z} air`, 4000);
-      if (name.startsWith('dig')) await b.command(`setblock ${x} ${y} ${z} dirt`, 4000);
+      await b.command(`give ${nick} oak_log 3`, 4000);
       await sleep(1500);
-      const slot = b.inventory.findSlot('dirt', true);
-      if (slot >= 0) b.inventory.select(slot);
-      await sleep(400);
-      const ref = { x, y: y - 1, z }; const target = { x, y, z }; const face = 1;
-      b.movement.lookAt({ x: x + 0.5, y: y, z: z + 0.5 });
-      await sleep(200);
-      const d = { action_type: 'click_block', block_position: ref, face, click_pos: { x: 0.5, y: 1, z: 0.5 }, block_runtime_id: b.hands.runtimeIdOf(ref) };
-      r.before = b.blockAt(x, y, z)?.name;
-      await fn(b, ref, d, face, target);
-      await sleep(2500);
+      r.inv = JSON.stringify(b.inventory.summary());
+      const sent = [];
+      const oq = b.client.queue.bind(b.client);
+      b.client.queue = (n, d) => { if (n !== 'player_auth_input') sent.push(n); return oq(n, d); };
+      const out = await Promise.race([fn(b), sleep(8000).then(() => 'таймаут')]);
+      await sleep(1500);
+      r.sent = [...new Set(sent)].join(',');
+      r.result = JSON.stringify(out, (k, x) => (typeof x === 'bigint' ? String(x) : x))?.slice(0, 300);
       r.alive = !b.ended;
-      r.after = b.blockAt(x, y, z)?.name;
-      r.ok = r.alive && r.after !== r.before;
+      r.invAfter = JSON.stringify(b.inventory.summary());
       b.quit();
     } catch (e) { r.error = e.message; }
     log(name, JSON.stringify(r));
