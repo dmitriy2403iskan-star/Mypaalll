@@ -433,7 +433,10 @@ export async function smeltItem(pal, item, count = 1) {
     furnace = await placeNear(pal, 'furnace');
   }
   await approach(pal, furnace, 3);
-  if (!(await cr.openBlock(furnace))) throw new ActionError('Печь не открылась.');
+  // старые сервера не сразу принимают клик после установки блока/закрытия окна — повторяем с паузой
+  let opened = false;
+  for (let k = 0; k < 3 && !opened; k++) { if (k) await sleep(1200); opened = await cr.openBlock(furnace); }
+  if (!opened) throw new ActionError('Печь не открылась.');
   try {
     const slotsNow = () => cr.containers.get(String(cr.window?.id)) || [];
     // топливо

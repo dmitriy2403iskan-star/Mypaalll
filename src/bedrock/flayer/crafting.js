@@ -486,6 +486,7 @@ export class Crafting {
       const on = () => { clearTimeout(t); resolve(true); };
       this.body.once('containerOpen', on);
     });
+    await sleep(250);
     // клик по грани, затем кликом в центр — обоими способами (у разных версий свои правила, как у верстака)
     const hands = this.body.hands;
     await hands.useBlock(pos);
