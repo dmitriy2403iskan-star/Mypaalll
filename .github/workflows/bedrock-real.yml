@@ -13,7 +13,7 @@ concurrency:
 jobs:
   bds:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +36,10 @@ jobs:
         env:
           # подробный сетевой лог — чтобы видеть, на каком шаге рвётся подключение
           DEBUG: ${{ matrix.version != '1.26.60' && 'raknet' || '' }}
+      - name: Зонд пакетов рук (новейшая версия)
+        if: always() && matrix.version == '1.26.60'
+        continue-on-error: true
+        run: node --no-warnings test/bedrock-probe.mjs ${{ matrix.version }} 2>&1 | grep -v raknet | tail -60
       - name: Сетевой лог (при ошибке)
         if: failure()
         run: grep -vE '^\s*$' test.log | grep -iE 'mypal|raknet|connect|incompat|pong|request|reply|mtu|protocol|error' | head -120
