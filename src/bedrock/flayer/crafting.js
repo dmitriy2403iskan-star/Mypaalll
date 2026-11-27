@@ -257,7 +257,10 @@ export class Crafting {
   /** Один крафт по рецепту (times раз): сначала через книгу рецептов, затем «руками» через сетку. */
   async craftOnce(r, times = 1, { table = false } = {}) {
     if (!this.plan(r, times)) return { ok: false, error: 'не хватает ингредиентов' };
-    const methods = this.goodMethod ? [this.goodMethod, ...['auto', 'grid'].filter((m) => m !== this.goodMethod)] : ['auto', 'grid'];
+    // до 1.17 у craft_recipe_auto другой формат — сервер рвёт соединение, поэтому только «руками» через сетку
+    const [maj, min] = String(this.body.version).split('.').map(Number);
+    const all = maj === 1 && min < 17 ? ['grid'] : ['auto', 'grid'];
+    const methods = this.goodMethod ? [this.goodMethod, ...all.filter((m) => m !== this.goodMethod)] : all;
     const errors = [];
     for (const m of methods) {
       const res = m === 'auto' ? await this.craftAuto(r, times) : await this.craftGrid(r, table);
