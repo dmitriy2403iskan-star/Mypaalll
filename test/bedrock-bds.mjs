@@ -184,6 +184,15 @@ try {
     const pal = { bot: alex, interrupted: false };
     const planks = () => Object.entries(alex.inventory.summary()).filter(([n]) => /planks/.test(n)).reduce((a, [, c]) => a + c, 0);
     for (const [item, n] of [['oak_planks', 12], ['stick', 4], ['crafting_table', 1], ['wooden_pickaxe', 1]]) {
+      if (item === 'wooden_pickaxe') {
+        // отладка установки скрафченного верстака: что в руке, открыто ли окно, что ответил сервер
+        const ts = alex.inventory.findSlot('crafting_table');
+        results.craft.tableItem = JSON.stringify(alex.inventory.slots[ts], (k, x) => (typeof x === 'bigint' ? String(x) : x))?.slice(0, 300);
+        results.craft.windowOpen = JSON.stringify(alex.crafting.window);
+        const seen = {}; const onP = (pk) => { const nn = pk?.data?.name; if (nn && !skip.test(nn)) seen[nn] = (seen[nn] || 0) + 1; };
+        alex.client.on('packet', onP);
+        setTimeout(() => { alex.client.off('packet', onP); results.craft.tablePlaceReplied = seen; }, 15000);
+      }
       try { results.craft[item] = await craftItem(pal, item, n); } catch (e) { results.craft[item] = `ОШИБКА: ${e.message}`; }
       log('крафт', item, '→', results.craft[item]);
     }
@@ -197,7 +206,9 @@ try {
     results.craft.planks = planks();
     results.craft.pickaxe = alex.inventory.count('wooden_pickaxe');
     results.craft.inventory = alex.inventory.summary();
+    await sleep(500);
     log('крафт:', JSON.stringify(results.craft));
+    log('верстак в руке:', results.craft.tableItem, 'окно:', results.craft.windowOpen, 'сервер:', JSON.stringify(results.craft.tablePlaceReplied));
   }
   alex.quit(); steve.quit();
 } catch (e) {
