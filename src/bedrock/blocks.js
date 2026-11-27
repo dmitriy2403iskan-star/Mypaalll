@@ -58,8 +58,12 @@ export function blockArg(name, version, extraStates = {}, extraData = 0) {
 }
 
 /** Выполнить команду «от позиции игрока» в синтаксисе нужной версии. */
-export function execAt(version, target, command) {
+export function execAt(version, target, command, self) {
   const t = `"${String(target).replace(/"/g, '')}"`;
-  if (version && cmpVersion(version, '1.19.50') < 0) return `execute ${t} ~ ~ ~ ${command}`;
+  if (version && cmpVersion(version, '1.19.50') < 0) {
+    // в старом /execute исполнителем становится цель, и @s означает её — бота называем по имени
+    const cmd = self ? command.replace(/@s\b/g, `"${String(self).replace(/"/g, '')}"`) : command;
+    return `execute ${t} ~ ~ ~ ${cmd}`;
+  }
   return `execute at ${t} run ${command}`;
 }

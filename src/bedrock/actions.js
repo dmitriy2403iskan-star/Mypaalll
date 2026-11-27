@@ -93,7 +93,7 @@ export default [
     description: 'Переместиться к игроку (телепорт командой).',
     parameters: { type: 'object', properties: { player: { type: 'string' } }, required: ['player'] },
     async run(pal, { player }) {
-      const r = await pal.bot.command(execAt(pal.bot.version, player, 'tp @s ^1 ^ ^-1'));
+      const r = await pal.bot.command(execAt(pal.bot.version, player, 'tp @s ^1 ^ ^-1', pal.bot.username));
       if (!r.success) throw new ActionError(`Не получилось: ${r.output}. Нужны читы/оператор, и игрок должен быть онлайн.`);
       return `Я рядом с ${player}.`;
     },
@@ -247,7 +247,7 @@ export function startBedrockModes(pal) {
       const target = body.findPlayer(mode.player);
       const me = body.entity?.position;
       const far = !target?.position || !me || Math.hypot(target.position.x - me.x, target.position.z - me.z) > (mode.distance || 3) + 2;
-      if (far) await body.command(execAt(body.version, mode.player, `tp @s ^1 ^ ^-${mode.distance || 2}`), 2500);
+      if (far) await body.command(execAt(body.version, mode.player, `tp @s ^1 ^ ^-${mode.distance || 2}`, body.username), 2500);
       if (mode.type === 'guard') await body.command(execAt(body.version, mode.player, 'kill @e[family=monster,r=12]'), 2500);
     } finally {
       busy = false;

@@ -51,10 +51,13 @@ export class BedrockWorld extends EventEmitter {
     let count = p.sub_chunk_count;
     if (count > 0x7fffffff) count -= 0x100000000;
     this.stats.counts[count] = (this.stats.counts[count] || 0) + 1;
-    if (count === -1 || count === -2) {
-      if (this.modern) col.networkDecodeNoCache(p.payload, count); // тут только биомы
+    // режим запроса подчанков: раньше -1/-2 в sub_chunk_count, с 1.26.40 — 0 (+ highest_subchunk_count, если ограничен)
+    const pollingNew = atLeast(this.version, '1.26.40') && count === 0;
+    if (count === -1 || count === -2 || pollingNew) {
+      if (this.modern) { try { col.networkDecodeNoCache(p.payload, -1); } catch { /* биомы не обязательны */ } }
       this.columns.set(this.key(p.x, p.z), col);
-      const top = count === -2 && typeof p.highest_subchunk_count === 'number' ? p.highest_subchunk_count : (col.maxCY - col.minCY);
+      const limited = (count === -2 || pollingNew) && typeof p.highest_subchunk_count === 'number';
+      const top = limited ? p.highest_subchunk_count : (col.maxCY - col.minCY);
       const requests = [];
       for (let i = 0; i < top; i++) requests.push({ x: 0, y: col.minCY + i, z: 0 });
       this.stats.request++;
