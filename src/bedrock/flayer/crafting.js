@@ -180,6 +180,7 @@ export class Crafting {
     if (!field) return undefined;
     const target = field.type?.[1]?.type;
     const list = r.input.filter((i) => i.kind !== 'empty');
+    if (this.autoIngredientsMode === 'none') return [];
     if (target === 'RecipeIngredient2') {
       return list.map((i) => {
         const count = (i.count || 1) * times;
@@ -201,6 +202,15 @@ export class Crafting {
       }));
     }
     return r.output.map((o) => ({ ...o, count: (o.count || 1) * times }));
+  }
+
+  /** results_deprecated: старый клиент его шлёт; в 1.26.60+ формат описания предмета другой — по умолчанию не шлём. */
+  resultsAction(r, times) {
+    const field = this.actionSchema('results_deprecated').find((f) => f.name === 'result_items');
+    const modern = field?.type?.[1]?.type === 'ItemStackRequestInstanceDescriptor';
+    const mode = this.resultsMode || (modern ? 'none' : 'full');
+    if (mode === 'none') return null;
+    return this.action('results_deprecated', { result_items: mode === 'empty' ? [] : this.resultItems(r, times), times });
   }
 
   action(kind, values) {
@@ -284,8 +294,8 @@ export class Crafting {
       const id = this.requestId;
       const actions = [
         this.action('craft_recipe_auto', { recipe_network_id: r.networkId, times, ingredients: this.autoIngredients(r, times) }),
-        this.action('results_deprecated', { result_items: this.resultItems(r, times), times }),
       ];
+      const rd = this.resultsAction(r, times); if (rd) actions.push(rd);
       for (const [slot, n] of use) actions.push(this.action('consume', { count: n, source: this.slotInfo(this.invSlotType(slot, style), slot, inv.slots[slot]?.stack_id) }));
       const destStack = inv.slots[dest]?.stack_id ?? 0;
       actions.push(this.action('place', { count: outCount, source: this.slotInfo('creative_output', CREATED_OUTPUT_SLOT, id), destination: this.slotInfo(this.invSlotType(dest, style), dest, destStack) }));
@@ -343,8 +353,8 @@ export class Crafting {
     const id = this.requestId;
     const actions = [
       this.action('craft_recipe', { recipe_network_id: r.networkId, times: 1 }),
-      this.action('results_deprecated', { result_items: this.resultItems(r, 1), times: 1 }),
     ];
+    const rd = this.resultsAction(r, 1); if (rd) actions.push(rd);
     for (const [cell, sid] of grid) actions.push(this.action('consume', { count: 1, source: this.slotInfo('crafting_input', cell, sid) }));
     actions.push(this.action('place', { count: outCount, source: this.slotInfo('creative_output', CREATED_OUTPUT_SLOT, id), destination: this.slotInfo(this.invSlotType(dest, style), dest, inv.slots[dest]?.stack_id ?? 0) }));
     const resp = await this.send(actions);

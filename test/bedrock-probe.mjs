@@ -28,18 +28,13 @@ function connect(name) {
 const air = { network_id: 0, count: 0, metadata: 0, has_stack_id: false, block_runtime_id: 0, extra: { has_nbt: 'false', can_place_on: [], can_destroy: [] } };
 
 // известные результаты для 1.26.60 (зонд рук): auth tx — ок, start_item_use_on — обрыв, ломание block_action — ок
+const planks = (b) => b.crafting.recipesFor('oak_planks').find((x) => b.crafting.plan(x, 1));
 const variants = {
-  'craft: open_inventory': async (b) => { r_open(b); await b.crafting.openInventory(); },
-  'craft: move hotbar→inventory (place)': async (b) => {
-    const cr = b.crafting; const inv = b.inventory; const from = inv.findSlot('oak_log');
-    return cr.send([cr.action('place', { count: 1, source: cr.slotInfo('hotbar', from, inv.slots[from]?.stack_id), destination: cr.slotInfo('inventory', 20, 0) })]);
-  },
-  'craft: move combined (hotbar_and_inventory)': async (b) => {
-    const cr = b.crafting; const inv = b.inventory; const from = inv.findSlot('oak_log');
-    return cr.send([cr.action('place', { count: 1, source: cr.slotInfo('hotbar_and_inventory', from, inv.slots[from]?.stack_id), destination: cr.slotInfo('hotbar_and_inventory', 20, 0) })]);
-  },
-  'craft: grid planks': async (b) => { const r = b.crafting.recipesFor('oak_planks').find((x) => b.crafting.plan(x, 1)); return r ? b.crafting.craftGrid(r, false) : 'нет рецепта'; },
-  'craft: auto planks': async (b) => { const r = b.crafting.recipesFor('oak_planks').find((x) => b.crafting.plan(x, 1)); return r ? b.crafting.craftAuto(r, 1) : 'нет рецепта'; },
+  'craft: grid, без results_deprecated': (b) => { b.crafting.resultsMode = 'none'; return b.crafting.craftGrid(planks(b), false); },
+  'craft: grid, results_deprecated пустой': (b) => { b.crafting.resultsMode = 'empty'; return b.crafting.craftGrid(planks(b), false); },
+  'craft: auto, без results, без ingredients': (b) => { b.crafting.resultsMode = 'none'; b.crafting.autoIngredientsMode = 'none'; return b.crafting.craftAuto(planks(b), 1); },
+  'craft: auto, без results, с ingredients': (b) => { b.crafting.resultsMode = 'none'; return b.crafting.craftAuto(planks(b), 1); },
+  'craft: grid, results полный (как раньше)': (b) => { b.crafting.resultsMode = 'full'; return b.crafting.craftGrid(planks(b), false); },
 };
 const r_open = () => {};
 
