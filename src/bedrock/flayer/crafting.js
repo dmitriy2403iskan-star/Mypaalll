@@ -290,8 +290,10 @@ export class Crafting {
       last = resp;
       if (resp.status === 'ok') {
         this.goodStyle = style;
-        const before = inv.slots[dest];
-        this.applyResponse(resp, { slot: dest, item: { ...out, count: (before?.count || 0) + outCount } });
+        // сначала сами считаем результат (сервер перечисляет не все изменённые слоты), затем уточняем по ответу
+        for (const [slot, n] of use) { const it = inv.slots[slot]; inv.slots[slot] = it && it.count > n ? { ...it, count: it.count - n } : null; }
+        this.addOutput(dest, out, outCount);
+        this.applyResponse(resp);
         return { ok: true };
       }
       if (resp.status === 'timeout') break;
@@ -327,9 +329,9 @@ export class Crafting {
       const item = inv.slots[src];
       const resp = await this.send([this.action('place', { count: 1, source: this.slotInfo(this.invSlotType(src, style), src, item.stack_id), destination: this.slotInfo('crafting_input', cell, 0) })]);
       if (resp.status !== 'ok') return { ok: false, error: `не положил в сетку (${resp.status})` };
+      inv.slots[src] = item.count > 1 ? { ...item, count: item.count - 1 } : null;
       const got = this.applyResponse(resp);
       grid.set(cell, got.crafting_input?.[cell] ?? resp.request_id);
-      if (!got.hotbar && !got.inventory) inv.slots[src] = item.count > 1 ? { ...item, count: item.count - 1 } : null;
     }
     const out = r.output[0];
     const outCount = out.count || 1;
@@ -344,9 +346,15 @@ export class Crafting {
     actions.push(this.action('place', { count: outCount, source: this.slotInfo('creative_output', CREATED_OUTPUT_SLOT, id), destination: this.slotInfo(this.invSlotType(dest, style), dest, inv.slots[dest]?.stack_id ?? 0) }));
     const resp = await this.send(actions);
     if (resp.status !== 'ok') return { ok: false, error: `сервер отклонил (${resp.status})` };
-    const before = inv.slots[dest];
-    this.applyResponse(resp, { slot: dest, item: { ...out, count: (before?.count || 0) + outCount } });
+    this.addOutput(dest, out, outCount);
+    this.applyResponse(resp);
     return { ok: true };
+  }
+
+  addOutput(dest, out, n) {
+    const inv = this.body.inventory;
+    const cur = inv.slots[dest];
+    inv.slots[dest] = cur?.network_id ? { ...cur, count: cur.count + n } : { ...out, count: n, has_stack_id: 1, stack_id: 0 };
   }
 
   /** Открыть свой инвентарь (как кнопка E) — некоторые сервера крафтят 2x2 только при открытом экране. */

@@ -157,8 +157,11 @@ try {
     if (!g.success) g = await alex.command('give Alex log 3', 6000);
     await sleep(1500);
     const responses = [];
-    const onResp = (p) => { for (const r of p.responses || []) responses.push(r.status); };
+    const detail = []; const pk = {};
+    const onResp = (p) => { for (const r of p.responses || []) { responses.push(r.status); if (detail.length < 6) detail.push(JSON.stringify(r, (k, x) => (typeof x === 'bigint' ? String(x) : x)).slice(0, 400)); } };
+    const onPk = (p) => { const n = p?.data?.name; if (n && !skip.test(n)) pk[n] = (pk[n] || 0) + 1; };
     alex.client.on('item_stack_response', onResp);
+    alex.client.on('packet', onPk);
     const { craftItem } = await import('../src/bedrock/handsActions.js');
     const pal = { bot: alex, interrupted: false };
     const planks = () => Object.entries(alex.inventory.summary()).filter(([n]) => /planks/.test(n)).reduce((a, [, c]) => a + c, 0);
@@ -167,7 +170,11 @@ try {
       log('крафт', item, '→', results.craft[item]);
     }
     alex.client.off('item_stack_response', onResp);
+    alex.client.off('packet', onPk);
     results.craft.responses = responses.join(',');
+    results.craft.method = alex.crafting?.goodMethod;
+    results.craft.packets = pk;
+    log('ответы сервера на крафт:', detail.join('\n'));
     results.craft.style = alex.crafting?.goodStyle;
     results.craft.planks = planks();
     results.craft.pickaxe = alex.inventory.count('wooden_pickaxe');
