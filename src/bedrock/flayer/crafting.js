@@ -226,12 +226,14 @@ export class Crafting {
     }).then((r) => ({ ...r, request_id: r.request_id ?? id }));
   }
 
-  /** Применить ответ сервера к нашему инвентарю (новые количества и stack_id). */
+  /** Применить ответ сервера к нашему инвентарю (новые количества и stack_id). Возвращает { контейнер: { слот: stack_id } }. */
   applyResponse(resp, placed) {
     const inv = this.body.inventory;
+    const seen = {};
     for (const cont of resp.containers || []) {
-      const type = cont.slot_type?.container_id ?? cont.slot_type;
-      if (!/hotbar|inventory/.test(String(type))) continue;
+      const type = String(cont.slot_type?.container_id ?? cont.slot_type);
+      for (const s of cont.slots || []) (seen[type] ||= {})[s.slot] = s.item_stack_id;
+      if (!/hotbar|inventory/.test(type)) continue;
       for (const s of cont.slots || []) {
         const i = s.slot;
         if (i < 0 || i >= 36) continue;
@@ -241,6 +243,7 @@ export class Crafting {
         inv.slots[i] = { ...base, count: s.count, stack_id: s.item_stack_id ?? base.stack_id, has_stack_id: 1 };
       }
     }
+    return seen;
   }
 
   /** Слот для готового предмета: стопка того же предмета или пустой. */
@@ -251,10 +254,22 @@ export class Crafting {
     return -1;
   }
 
-  /** Один крафт по рецепту (times раз). Возвращает true при успехе. */
-  async craftOnce(r, times = 1) {
+  /** Один крафт по рецепту (times раз): сначала через книгу рецептов, затем «руками» через сетку. */
+  async craftOnce(r, times = 1, { table = false } = {}) {
+    if (!this.plan(r, times)) return { ok: false, error: 'не хватает ингредиентов' };
+    const methods = this.goodMethod ? [this.goodMethod, ...['auto', 'grid'].filter((m) => m !== this.goodMethod)] : ['auto', 'grid'];
+    const errors = [];
+    for (const m of methods) {
+      const res = m === 'auto' ? await this.craftAuto(r, times) : await this.craftGrid(r, table);
+      if (res.ok) { this.goodMethod = m; return res; }
+      errors.push(`${m}: ${res.error}`);
+      if (!this.plan(r, times)) break; // часть ингредиентов застряла в сетке — вернутся при закрытии окна
+    }
+    return { ok: false, error: errors.join('; ') };
+  }
+
+  async craftAuto(r, times = 1) {
     const use = this.plan(r, times);
-    if (!use) return { ok: false, error: 'не хватает ингредиентов' };
     const out = r.output[0];
     const outCount = (out.count || 1) * times;
     const dest = this.destSlot(out, outCount);
@@ -281,7 +296,71 @@ export class Crafting {
       }
       if (resp.status === 'timeout') break;
     }
-    return { ok: false, error: `сервер отклонил крафт (${last?.status || '?'})` };
+    return { ok: false, error: `сервер отклонил (${last?.status ?? '?'})` };
+  }
+
+  /** Раскладка рецепта по клеткам сетки: [{ cell, ing }]. 2x2 — слоты 28–31, 3x3 — 32–40. */
+  layout(r, table) {
+    const gw = table ? 3 : 2;
+    const base = table ? 32 : 28;
+    const cells = [];
+    if (r.shape === 'shaped') {
+      r.input.forEach((ing, k) => { if (ing.kind !== 'empty') cells.push({ cell: base + Math.floor(k / r.width) * gw + (k % r.width), ing }); });
+    } else {
+      let k = 0;
+      for (const ing of r.input) if (ing.kind !== 'empty') for (let n = 0; n < (ing.count || 1); n++) cells.push({ cell: base + k++, ing });
+    }
+    return cells;
+  }
+
+  /** Как игрок: открыть инвентарь (или верстак), разложить по одному предмету в сетку, забрать результат. */
+  async craftGrid(r, table) {
+    const inv = this.body.inventory;
+    const style = this.goodStyle || 'split';
+    if (!table) await this.openInventory();
+    const cells = this.layout(r, table);
+    const grid = new Map(); // клетка → stack_id
+    for (const { cell, ing } of cells) {
+      let src = -1;
+      for (let i = 0; i < 36; i++) if (inv.slots[i]?.count && this.matches(ing, inv.slots[i])) { src = i; break; }
+      if (src < 0) return { ok: false, error: 'не хватает ингредиентов' };
+      const item = inv.slots[src];
+      const resp = await this.send([this.action('place', { count: 1, source: this.slotInfo(this.invSlotType(src, style), src, item.stack_id), destination: this.slotInfo('crafting_input', cell, 0) })]);
+      if (resp.status !== 'ok') return { ok: false, error: `не положил в сетку (${resp.status})` };
+      const got = this.applyResponse(resp);
+      grid.set(cell, got.crafting_input?.[cell] ?? resp.request_id);
+      if (!got.hotbar && !got.inventory) inv.slots[src] = item.count > 1 ? { ...item, count: item.count - 1 } : null;
+    }
+    const out = r.output[0];
+    const outCount = out.count || 1;
+    const dest = this.destSlot(out, outCount);
+    if (dest < 0) return { ok: false, error: 'инвентарь полон' };
+    const id = this.requestId;
+    const actions = [
+      this.action('craft_recipe', { recipe_network_id: r.networkId, times: 1 }),
+      this.action('results_deprecated', { result_items: this.resultItems(r, 1), times: 1 }),
+    ];
+    for (const [cell, sid] of grid) actions.push(this.action('consume', { count: 1, source: this.slotInfo('crafting_input', cell, sid) }));
+    actions.push(this.action('place', { count: outCount, source: this.slotInfo('creative_output', CREATED_OUTPUT_SLOT, id), destination: this.slotInfo(this.invSlotType(dest, style), dest, inv.slots[dest]?.stack_id ?? 0) }));
+    const resp = await this.send(actions);
+    if (resp.status !== 'ok') return { ok: false, error: `сервер отклонил (${resp.status})` };
+    const before = inv.slots[dest];
+    this.applyResponse(resp, { slot: dest, item: { ...out, count: (before?.count || 0) + outCount } });
+    return { ok: true };
+  }
+
+  /** Открыть свой инвентарь (как кнопка E) — некоторые сервера крафтят 2x2 только при открытом экране. */
+  async openInventory() {
+    if (this.window) return true;
+    const opened = new Promise((resolve) => {
+      const t = setTimeout(() => { this.body.off('containerOpen', on); resolve(false); }, 1200);
+      const on = () => { clearTimeout(t); resolve(true); };
+      this.body.once('containerOpen', on);
+    });
+    const data = { action_id: 'open_inventory', target_entity_id: this.body.runtimeId };
+    if (this.types.packet_interact[1].some((f) => f.name === 'has_position')) data.has_position = false;
+    try { this.body.client.queue('interact', data); } catch { return false; }
+    return opened;
   }
 
   /** Переложить предмет из рюкзака в свободный слот хотбара (как перетаскивание мышью). */

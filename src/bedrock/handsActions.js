@@ -162,17 +162,19 @@ export async function craftItem(pal, item, count = 1, { noTable = false } = {}) 
       const r = list.find((x) => cr.plan(x, 1) && !(noTable && cr.needsTable(x)));
       if (!r) {
         if (made) break;
-        const best = list.find((x) => !(noTable && cr.needsTable(x))) || list[0];
+        const cands = list.filter((x) => !(noTable && cr.needsTable(x)));
+        const total = (x) => Object.values(cr.missingFor(x)).reduce((a, b) => a + b, 0);
+        const best = (cands.length ? cands : list).sort((a, b) => total(a) - total(b))[0];
         throw new ActionError(`Не хватает материалов для ${name}: ${fmt(cr.missingFor(best))}. Инвентарь: ${fmt(body.inventory.summary())}`);
       }
       if (cr.needsTable(r) && !usedTable) { await ensureTable(pal); usedTable = true; }
-      const res = await cr.craftOnce(r, 1);
+      const res = await cr.craftOnce(r, 1, { table: cr.needsTable(r) });
       if (!res.ok) { if (made) break; throw new ActionError(`Крафт ${name} не удался: ${res.error}`); }
       made += r.output[0].count || 1;
       await sleep(80);
     }
   } finally {
-    if (usedTable) cr.closeWindow();
+    cr.closeWindow(); // закрыть верстак/инвентарь: всё, что осталось в сетке, вернётся в инвентарь
   }
   const outName = cr.outputName(list[0]);
   return `Скрафтил ${made} ${outName}${made < count ? ` (на ${count} не хватило материалов)` : ''}. Теперь в инвентаре: ${body.inventory.count(outName) || before + made}.`;

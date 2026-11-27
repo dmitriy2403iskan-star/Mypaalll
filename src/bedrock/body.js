@@ -74,6 +74,8 @@ export class BedrockBody extends EventEmitter {
       this.entity = pos ? { position: pos } : { position: { x: p.player_position.x, y: 64, z: p.player_position.z }, unknownY: true };
       this.dimension = p.dimension || 'overworld';
       this.version = c.options?.version;
+      // false — сервер не принимает item_stack_request (старые сервера): крафт идёт через inventory_transaction
+      this.serverAuthInventory = p.server_authoritative_inventory;
       // fallback = режим мира по умолчанию
       this.worldGameMode = p.world_gamemode;
       this.setGameMode(p.player_gamemode === 'fallback' ? p.world_gamemode : p.player_gamemode);

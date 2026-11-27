@@ -139,15 +139,20 @@ try {
     results.hands.afterDig = alex.blockAt(spot.x, spot.y, spot.z)?.name;
     // подобрать дроп: как в действии collect_blocks
     results.hands.dropsSeen = alex.inventory.nearbyDrops(spot, 6).map((d) => d.name);
+    const takers = [];
+    const onTake = (p) => takers.push(String(p.target_runtime_entity_id ?? p.target) === String(alex.runtimeId) ? 'Alex' : 'другой');
+    alex.client.on('take_item_entity', onTake);
     const { pickupDrops } = await import('../src/bedrock/handsActions.js');
     await pickupDrops({ bot: alex, interrupted: false }, spot);
     await sleep(1000);
     results.hands.dropsLeft = alex.inventory.nearbyDrops(spot, 6).length;
+    alex.client.off('take_item_entity', onTake);
+    results.hands.pickedBy = takers.join(',');
     results.hands.dirtAfter = alex.inventory.count('dirt');
     log('руки:', JSON.stringify(results.hands));
 
     // ---- КРАФТ без команд: доски (2x2), палки, верстак, кирка (3x3 у верстака) ----
-    results.craft = { recipes: alex.crafting?.recipes.length || 0 };
+    results.craft = { recipes: alex.crafting?.recipes.length || 0, serverAuthInventory: alex.serverAuthInventory };
     let g = await alex.command('give Alex oak_log 3', 6000);
     if (!g.success) g = await alex.command('give Alex log 3', 6000);
     await sleep(1500);
