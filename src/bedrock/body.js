@@ -206,11 +206,18 @@ export class BedrockBody extends EventEmitter {
     if (p.type === 'translation' && Array.isArray(p.parameters)) {
       if (/^chat\.type\.(text|announcement)$/.test(p.message)) { name = p.parameters[0]; msg = p.parameters[1]; }
       else if (/^commands\.message\.display\.incoming$/.test(p.message)) { name = p.parameters[0]; msg = p.parameters[1]; whisper = true; }
-      else return;
-    } else if (p.type !== 'chat' && p.type !== 'whisper') return;
+      else { this.noteSkippedText(p); return; }
+    } else if (p.type !== 'chat' && p.type !== 'whisper') { this.noteSkippedText(p); return; }
     if (!name || name === this.username || msg === undefined) return;
     name = String(name).replace(/§./g, '');
     this.emit(whisper ? 'whisper' : 'chat', name, String(msg));
+  }
+
+  /** Диагностика: первые нераспознанные сообщения чата показываем в журнале. */
+  noteSkippedText(p) {
+    if (/popup|tip/.test(p.type)) return;
+    this.skippedTexts = (this.skippedTexts || 0) + 1;
+    if (this.skippedTexts <= 20) this.emit('netlog', `пропущено сообщение чата, тип ${p.type}: ${String(p.message).slice(0, 120)}`);
   }
 
   onMove(runtimeId, pos) {

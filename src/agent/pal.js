@@ -139,7 +139,10 @@ export class Pal extends EventEmitter {
       if (this.profile.owner) setTimeout(() => this.say(`Привет, ${this.profile.owner}! Я тут (${modeProfile(this.gameMode).title}).`), 1500);
     });
     bot.on('game', () => { if (this.status === 'online') this.onGameModeChange(); });
-    bot.on('chat', (username, message) => this.onChat(username, message, false));
+    bot.on('chat', (username, message) => {
+      if (bedrock) this.log('system', `Чат игры: ${username}: ${message}${this.shouldRespond(username, message, false) ? '' : ' (не отвечаю: нет имени бота, а ник не совпал с хозяином)'}`);
+      this.onChat(username, message, false);
+    });
     bot.on('whisper', (username, message) => this.onChat(username, message, true));
     bot.on('death', () => { this.log('system', 'Я погиб...'); this.memory.add('episodic', `Погиб в ${JSON.stringify(this.snapshot()?.position)}`, 2); this.stopAll(); });
     // понятные подсказки, если сервер на неподдерживаемой версии
@@ -251,6 +254,8 @@ export class Pal extends EventEmitter {
     const name = this.profile.name.toLowerCase();
     if (message.toLowerCase().includes(name)) return true;
     if (settings.get().agent.respondTo === 'all') return true;
+    // хозяин не указан — отвечаем на любое сообщение, иначе в игре бот выглядит «немым»
+    if (!this.profile.owner) return true;
     // хозяину отвечаем на всё, если он не обращается явно к другому боту
     return Boolean(this.profile.owner) && username.toLowerCase() === this.profile.owner.toLowerCase() && !this.mentionsOtherPal?.(message);
   }
