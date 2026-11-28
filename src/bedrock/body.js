@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { loadBedrockProtocol } from './protocol.js';
 import { attachFlayer } from './flayer/index.js';
 import { pickFriendWorld } from './friends.js';
+import { findLanWorld } from './lan.js';
 import { DATA_DIR } from '../config.js';
 
 const require = createRequire(import.meta.url);
@@ -45,6 +46,29 @@ export class BedrockBody extends EventEmitter {
   }
 
   connect() {
+    const o = this.opts;
+    if (o.transport !== 'nethernet' || o.realm) { this.open(); return; }
+    // поиск по локальной сети: сначала находим, на каком адресе отвечает мир, потом подключаемся
+    const { ping } = loadBedrockProtocol();
+    // асинхронно, чтобы подписчики событий успели подключиться после конструктора
+    Promise.resolve()
+      .then(() => {
+        this.emit('netlog', 'ищу мир в локальной сети (до 10 с)...');
+        return findLanWorld({ ping, host: o.host, port: Number(o.port) || 19132 });
+      })
+      .then((found) => {
+        if (this.ended) return; // пока искали, нажали «Отключить»
+        this.emit('netlog', `мир ответил: адрес ${found.host}, способ ${found.ad.transport}`);
+        this.open(found);
+      })
+      .catch((e) => {
+        if (this.ended) return;
+        this.emit('error', e);
+        this.end('closed');
+      });
+  }
+
+  open(found) {
     const { createClient } = loadBedrockProtocol();
     const o = this.opts;
     const options = {
@@ -68,7 +92,11 @@ export class BedrockBody extends EventEmitter {
     };
     if (o.version) options.version = o.version;
     if (o.realm) { options.realms = { realmName: o.realm }; delete options.host; delete options.port; }
-    if (o.transport === 'nethernet') options.transport = 'nethernet';
+    if (found) {
+      options.host = found.host;
+      options.transport = found.ad.transport;
+      if (found.ad.networkId != null && found.ad.transport === 'nethernet') options.nethernet = { networkId: found.ad.networkId };
+    }
     if (o.transport === 'friends' && !o.realm) {
       options.offline = false; // список друзей есть только у аккаунта Microsoft
       delete options.host;
