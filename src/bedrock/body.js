@@ -119,6 +119,7 @@ export class BedrockBody extends EventEmitter {
     this.client = c;
 
     c.on('start_game', (p) => {
+      this.adoptGamertag(c.profile);
       this.runtimeId = p.runtime_entity_id;
       this.uniqueId = p.entity_id;
       const pos = feet(p.player_position);
@@ -181,6 +182,18 @@ export class BedrockBody extends EventEmitter {
     if (o.nativeMovement !== false) attachFlayer(this);
   }
 
+  /**
+   * В игре бот виден под ником аккаунта Microsoft, а не под именем pal. Без этого он принимает
+   * свои сообщения за чужие и отвечает сам себе, а себя считает другим игроком.
+   */
+  adoptGamertag(profile) {
+    this.xuid = String(profile?.xuid || '');
+    if (!profile?.name || profile.name === this.username) return;
+    this.players.delete(profile.name);
+    this.username = profile.name;
+    this.emit('netlog', `в игре мой ник: ${profile.name}`);
+  }
+
   setGameMode(raw) {
     const m = String(raw ?? 'survival');
     const norm = m.includes('spectator') ? 'spectator' : m.startsWith('creative') ? 'creative' : m.startsWith('adventure') ? 'adventure' : 'survival';
@@ -208,8 +221,10 @@ export class BedrockBody extends EventEmitter {
       else if (/^commands\.message\.display\.incoming$/.test(p.message)) { name = p.parameters[0]; msg = p.parameters[1]; whisper = true; }
       else { this.noteSkippedText(p); return; }
     } else if (p.type !== 'chat' && p.type !== 'whisper') { this.noteSkippedText(p); return; }
-    if (!name || name === this.username || msg === undefined) return;
+    if (!name || msg === undefined) return;
     name = String(name).replace(/§./g, '');
+    // своё эхо: по нику или по Xbox ID
+    if (name === this.username || (this.xuid && this.xuid !== '0' && p.xuid === this.xuid)) return;
     this.emit(whisper ? 'whisper' : 'chat', name, String(msg));
   }
 
