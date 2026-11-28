@@ -149,7 +149,7 @@ export class BedrockBody extends EventEmitter {
     });
     c.on('player_list', (p) => {
       if (p.records?.type === 'add') {
-        for (const r of p.records.records || []) if (r.username && !this.players.has(r.username)) this.players.set(r.username, { position: null });
+        for (const r of p.records.records || []) if (r.username && r.username !== this.username && !this.players.has(r.username)) this.players.set(r.username, { position: null });
       }
     });
     c.on('update_attributes', (p) => {
