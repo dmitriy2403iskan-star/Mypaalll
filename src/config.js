@@ -23,7 +23,7 @@ function defaults() {
           effort: 'low', // low | medium | high — для игрового компаньона важна скорость ответа
           fallbacks: true, // server-side fallback при отказе модели (refusal)
         },
-        gemini: { type: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', apiKey: env('GEMINI_API_KEY'), model: env('GEMINI_MODEL', 'gemini-2.5-flash') },
+        gemini: { type: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', apiKey: env('GEMINI_API_KEY'), model: env('GEMINI_MODEL', 'gemini-3.8-flash') },
         openrouter: { type: 'openai', baseUrl: 'https://openrouter.ai/api/v1', apiKey: env('OPENROUTER_API_KEY'), model: 'openai/gpt-4o-mini' },
         groq: { type: 'openai', baseUrl: 'https://api.groq.com/openai/v1', apiKey: env('GROQ_API_KEY'), model: 'llama-3.3-70b-versatile' },
         deepseek: { type: 'openai', baseUrl: 'https://api.deepseek.com/v1', apiKey: env('DEEPSEEK_API_KEY'), model: 'deepseek-chat' },

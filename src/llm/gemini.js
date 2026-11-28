@@ -47,7 +47,8 @@ export class GeminiProvider {
   }
 
   async chat({ system, messages, tools = [], temperature, maxTokens = 4096 }) {
-    const { baseUrl, apiKey, model } = this.cfg;
+    const { baseUrl, model } = this.cfg;
+    const apiKey = this.cfg.apiKey?.trim(); // при вставке с телефона часто прицепляется пробел
     if (!apiKey) throw new Error('Не задан API-ключ Gemini');
     const body = {
       contents: this.toContents(messages),
