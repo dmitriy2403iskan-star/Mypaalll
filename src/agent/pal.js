@@ -111,6 +111,16 @@ export class Pal extends EventEmitter {
       this.log('system', `Подключаюсь к ${target}...`);
       bot = new BedrockBody({ username: this.profile.name, host: b.host || mc.host, port: b.port || 19132, auth: b.auth || 'offline', version: b.version || undefined, realm: b.realm || undefined, transport: b.transport, friend: b.friend });
       bot.on('netlog', (text) => this.log('system', `Сеть: ${text}`));
+      // ошибки «тела» (мир, ходьба, руки): без этого бот ломается молча. Первые 20, чтобы не забить журнал
+      let bodyErrors = 0;
+      bot.on('flayerError', (e) => { if (++bodyErrors <= 20) this.log('error', `Тело: ${e.message}`.slice(0, 600)); });
+      // через 15 с после входа показываем, готово ли тело
+      bot.once('spawn', () => setTimeout(() => {
+        if (bot.ended) return;
+        const p = bot.movement?.position || bot.entity?.position;
+        const under = p ? bot.blockAt?.(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) : null;
+        this.log('system', `Проверка тела: ${bot.nativeReady ? 'запущено' : 'НЕ запущено'}; режим ${bot.gameMode}; позиция ${p ? [p.x, p.y, p.z].map(Math.round).join(' ') : 'неизвестна'}; блок под ногами ${under ? under.name : 'не виден'}`);
+      }, 15_000));
       // вход Microsoft: показываем код в панели
       bot.on('msaCode', (d) => this.log('auth', `Вход в Microsoft для бота: открой ${d.verification_uri} и введи код ${d.user_code}`, { auth: d }));
     } else {
