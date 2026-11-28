@@ -39,7 +39,8 @@ function defaults() {
         auth: env('BEDROCK_AUTH', 'offline'), // offline (BDS с online-mode=false) | microsoft (LAN-мир с телефона, Realms, онлайн-серверы)
         realm: env('BEDROCK_REALM', ''),     // имя Realm (тогда host/port не нужны)
         version: env('BEDROCK_VERSION', ''), // пусто = автоопределение
-        transport: 'raknet',                 // raknet | nethernet (новые LAN-миры)
+        transport: 'raknet',                 // raknet (авто по адресу) | nethernet (новые LAN-миры) | friends (мир друга через Xbox)
+        friend: '',                          // для friends: геймертег хозяина мира; пусто — если открыт только один мир
         nativeMovement: true,                // своё «тело»: ходьба без команд (false — только телепорт командами)
       },
       host: env('MC_HOST', 'localhost'),

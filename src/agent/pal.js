@@ -105,8 +105,11 @@ export class Pal extends EventEmitter {
     let bot;
     if (bedrock) {
       const b = mc.bedrock || {};
-      this.log('system', b.realm ? `Подключаюсь к Realm «${b.realm}» (Bedrock)...` : `Подключаюсь к Bedrock ${b.host || mc.host}:${b.port || 19132}...`);
-      bot = new BedrockBody({ username: this.profile.name, host: b.host || mc.host, port: b.port || 19132, auth: b.auth || 'offline', version: b.version || undefined, realm: b.realm || undefined, transport: b.transport });
+      const target = b.realm ? `Realm «${b.realm}» (Bedrock)`
+        : b.transport === 'friends' ? `миру друга${b.friend ? ` ${b.friend}` : ''} (Bedrock, через друзей Xbox)`
+          : `Bedrock ${b.host || mc.host}:${b.port || 19132}`;
+      this.log('system', `Подключаюсь к ${target}...`);
+      bot = new BedrockBody({ username: this.profile.name, host: b.host || mc.host, port: b.port || 19132, auth: b.auth || 'offline', version: b.version || undefined, realm: b.realm || undefined, transport: b.transport, friend: b.friend });
       bot.on('netlog', (text) => this.log('system', `Сеть: ${text}`));
       // вход Microsoft: показываем код в панели
       bot.on('msaCode', (d) => this.log('auth', `Вход в Microsoft для бота: открой ${d.verification_uri} и введи код ${d.user_code}`, { auth: d }));

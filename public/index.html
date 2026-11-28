@@ -161,6 +161,10 @@
           </div>
           <div data-edition="bedrock">
             <div class="row">
+              <label>Как подключаться
+                <select name="minecraft.bedrock.transport"><option value="raknet">По адресу (LAN, сервер)</option><option value="friends">Через друзей Xbox</option><option value="nethernet">NetherNet по LAN</option></select>
+              </label>
+              <label>Ник друга (хозяина мира) <input name="minecraft.bedrock.friend" placeholder="для входа через друзей"></label>
               <label>Хост <input name="minecraft.bedrock.host" placeholder="127.0.0.1 — мир на этом же телефоне"></label>
               <label>Порт <input name="minecraft.bedrock.port" type="number"></label>
               <label>Вход
@@ -170,6 +174,7 @@
               <label>Версия <input name="minecraft.bedrock.version" placeholder="авто"></label>
             </div>
             <p class="hint versions-line" data-versions="bedrock"></p>
+            <p class="hint"><b>Через друзей Xbox:</b> войди боту в его собственный аккаунт Microsoft, добавь его в друзья, открой мир для друзей. Хост и порт в этом режиме не нужны.</p>
             <p class="hint">В Bedrock pal действует командами (/tp, /fill, /setblock, /give): в мире должны быть <b>включены читы</b>, а боту нужно дать права <b>оператора</b>. При входе через Microsoft код появится в журнале на дашборде — у бота должен быть свой аккаунт.</p>
           </div>
         </div>

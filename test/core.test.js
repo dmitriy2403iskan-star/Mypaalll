@@ -100,3 +100,14 @@ test('Определение намерений для Context Manager', () => {
   assert.ok(detectIntents('добудь камня').includes('gather'));
   assert.deepEqual(detectIntents('как дела?'), []);
 });
+
+test('Bedrock: выбор мира друга', async () => {
+  const { pickFriendWorld } = await import('../src/bedrock/friends.js');
+  const a = { customProperties: { hostName: 'Steve', worldName: 'A' } };
+  const b = { customProperties: { hostName: 'Alex2', worldName: 'B' } };
+  assert.equal(pickFriendWorld([a], ''), a);
+  assert.equal(pickFriendWorld([a, b], ' alex2 '), b);
+  assert.throws(() => pickFriendWorld([a, b], ''), /несколько/);
+  assert.throws(() => pickFriendWorld([a], 'Bob'), /Не нашёл/);
+  assert.throws(() => pickFriendWorld([], ''), /Не нашёл/);
+});

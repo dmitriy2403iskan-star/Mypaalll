@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { loadBedrockProtocol } from './protocol.js';
 import { attachFlayer } from './flayer/index.js';
+import { pickFriendWorld } from './friends.js';
 import { DATA_DIR } from '../config.js';
 
 const require = createRequire(import.meta.url);
@@ -68,6 +69,23 @@ export class BedrockBody extends EventEmitter {
     if (o.version) options.version = o.version;
     if (o.realm) { options.realms = { realmName: o.realm }; delete options.host; delete options.port; }
     if (o.transport === 'nethernet') options.transport = 'nethernet';
+    if (o.transport === 'friends' && !o.realm) {
+      options.offline = false; // список друзей есть только у аккаунта Microsoft
+      delete options.host;
+      delete options.port;
+      options.world = {
+        pickSession: async (sessions) => {
+          const world = pickFriendWorld(sessions, o.friend);
+          const p = world.customProperties || {};
+          // версию берём из описания мира, если не задана вручную; библиотека читает options.version после выбора
+          const { Versions } = require('bedrock-protocol/src/options.js');
+          const version = Object.keys(Versions).find((v) => Versions[v] === Number(p.protocol));
+          if (!options.version && version) options.version = version;
+          this.emit('netlog', `нашёл мир друга ${p.hostName || ''} «${p.worldName || ''}», версия ${options.version || p.version || '?'}`);
+          return world;
+        },
+      };
+    }
 
     const c = createClient(options);
     this.client = c;
