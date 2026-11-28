@@ -120,6 +120,9 @@ export class Pal extends EventEmitter {
         const p = bot.movement?.position || bot.entity?.position;
         const under = p ? bot.blockAt?.(Math.floor(p.x), Math.floor(p.y) - 1, Math.floor(p.z)) : null;
         this.log('system', `Проверка тела: ${bot.nativeReady ? 'запущено' : 'НЕ запущено'}; режим ${bot.gameMode}; позиция ${p ? [p.x, p.y, p.z].map(Math.round).join(' ') : 'неизвестна'}; блок под ногами ${under ? under.name : 'не виден'}`);
+        const st = bot.world?.stats;
+        const loaded = Boolean(p && bot.world?.loaded?.(p.x, p.z));
+        this.log('system', `Проверка мира: участок под ботом ${loaded ? 'загружен' : 'НЕ загружен'}; такт движения ${bot.movement?.tick ?? 'нет'}; поправок от игры ${bot.movement?.corrections || 0}; ${st ? `чанки: целиком ${st.full}, по частям ${st.request}, частей запрошено ${st.subRequested}, получено ${st.subSuccess}, пустых ${st.subAir}, отказы ${JSON.stringify(st.subOther)}, ошибок ${st.errors}${st.lastError ? `: ${st.lastError.slice(0, 200)}` : ''}` : 'данных о чанках нет'}${bot.movement?.sendError ? `; ошибка отправки: ${bot.movement.sendError}` : ''}`);
       }, 15_000));
       // вход Microsoft: показываем код в панели
       bot.on('msaCode', (d) => this.log('auth', `Вход в Microsoft для бота: открой ${d.verification_uri} и введи код ${d.user_code}`, { auth: d }));
