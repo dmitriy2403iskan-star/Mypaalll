@@ -235,7 +235,8 @@ export class BedrockBody extends EventEmitter {
     if (this.ended) return;
     const base = {
       needs_translation: false, category: 'authored', type: 'chat', source_name: this.username, message,
-      xuid: '', platform_chat_id: '', has_filtered_message: false, filtered_message: '',
+      // в мире на телефоне хозяин может не показывать сообщения без Xbox ID отправителя
+      xuid: String(this.client.profile?.xuid || ''), platform_chat_id: '', has_filtered_message: false, filtered_message: '',
     };
     this.client.queue('text', base);
   }
@@ -282,6 +283,21 @@ export class BedrockBody extends EventEmitter {
       if (b && !/^(air|cave_air|void_air)$/.test(b.name)) seen.set(b.name, (seen.get(b.name) || 0) + 1);
     }
     return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([n]) => n);
+  }
+
+  /**
+   * Настоящий ник игрока. Из панели приходит условное имя («Игрок»), а нейросеть может исказить ник:
+   * точное совпадение → часть ника → хозяин → единственный другой игрок. null — понять, кто это, нельзя.
+   */
+  resolvePlayer(name, owner) {
+    const others = [...this.players.keys()].filter((n) => n !== this.username);
+    const norm = (v) => String(v ?? '').trim().toLowerCase();
+    const exact = (v) => others.find((n) => norm(n) === norm(v));
+    const wanted = norm(name);
+    return exact(name)
+      || (wanted.length >= 3 ? others.find((n) => norm(n).includes(wanted)) : undefined)
+      || (owner ? exact(owner) : undefined)
+      || (others.length === 1 ? others[0] : null);
   }
 
   findPlayer(name) {

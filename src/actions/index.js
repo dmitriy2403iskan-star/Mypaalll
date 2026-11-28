@@ -37,6 +37,12 @@ export async function runAction(pal, name, args) {
   if (pal.edition !== 'bedrock' && !PASSIVE.has(name) && name !== 'stop') pal.prepareForAction(name);
   const t0 = Date.now();
   try {
+    if (pal.edition === 'bedrock' && typeof args?.player === 'string' && pal.bot?.resolvePlayer) {
+      const real = pal.bot.resolvePlayer(args.player, pal.owner?.());
+      const known = [...pal.bot.players.keys()].filter((n) => n !== pal.bot.username);
+      if (real) args = { ...args, player: real };
+      else if (known.length) return { ok: false, result: `Не понял, кто такой «${args.player}». Игроки в мире: ${known.join(', ')}`, ms: 0 };
+    }
     const result = await action.run(pal, args || {});
     return { ok: true, result: String(result), ms: Date.now() - t0 };
   } catch (e) {
