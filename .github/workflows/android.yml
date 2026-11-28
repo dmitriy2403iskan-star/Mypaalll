@@ -17,8 +17,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    outputs:
-      signing: ${{ steps.sign.outputs.kind }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,22 +54,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-
-      # постоянная подпись: с ней новый APK ставится поверх старого и данные сохраняются
-      - name: Ключ подписи
-        id: sign
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/mypal.keystore"
-            keytool -list -keystore "$RUNNER_TEMP/mypal.keystore" -storepass mypal-release -alias mypal > /dev/null
-            echo "MYPAL_KEYSTORE=$RUNNER_TEMP/mypal.keystore" >> "$GITHUB_ENV"
-            echo "kind=постоянная" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::Нет секрета ANDROID_KEYSTORE_BASE64 — подпись временная, APK не обновится поверх старого"
-            echo "kind=ВРЕМЕННАЯ (поверх другой версии не установится)" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Сборка APK
         run: gradle -p android assembleRelease assembleDebug --no-daemon --stacktrace
@@ -142,6 +124,6 @@ jobs:
 
             **Какой файл качать:** `mypal-arm64-v8a.apk` — почти все современные телефоны. Не уверен — бери `mypal-all.apk`.
             Установка: открой файл на телефоне → разреши установку из этого источника.
-            Подпись: ${{ needs.build.outputs.signing }}.
+            Подпись: постоянная.
             Ветка: `${{ github.ref_name }}`, коммит `${{ github.sha }}`.
           files: apk/*.apk
