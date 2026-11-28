@@ -65,20 +65,13 @@ for (const md of mdCopies) {
       if (!keep.has(`${edition}/${v}`)) rm(path.join(edDir, v));
     }
   }
-  // Bedrock-бот работает командами: состояния блоков, таблицы Java↔Bedrock, исходники протокола и переводы ему не нужны
+  // blockStates.json, blockCollisionShapes.json и остальные данные Bedrock НЕ трогаем:
+  // без них не запускается «тело» бота (мир, ходьба, копание, удары)
   const bedrockDir = path.join(dataDir, 'bedrock');
   if (fs.existsSync(bedrockDir)) {
     for (const v of fs.readdirSync(bedrockDir)) {
       // исходники протокола не читаются во время работы — удаляем
       for (const f of ['proto.yml', 'types.yml']) rm(path.join(bedrockDir, v, f));
-      // эти minecraft-data читает при загрузке версии — заменяем пустыми заглушками нужного типа
-      const stubs = { 'blockStates.json': '[]', 'blocksJ2B.json': '{}', 'blocksB2J.json': '{}', 'language.json': '{}', 'blockCollisionShapes.json': '{"blocks":{},"shapes":{}}' };
-      for (const [f, stub] of Object.entries(stubs)) {
-        const file = path.join(bedrockDir, v, f);
-        if (!fs.existsSync(file)) continue;
-        freed += fs.statSync(file).size - stub.length;
-        fs.writeFileSync(file, stub);
-      }
     }
   }
   for (const extra of ['doc', 'docs', 'test']) rm(path.join(md, 'minecraft-data', extra));

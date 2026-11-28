@@ -17,6 +17,19 @@ android {
         versionName "0.4.${buildNumber}"
     }
 
+    // постоянный ключ из CI (секрет репозитория); сам ключ в репозитории не хранится
+    def keystorePath = System.getenv('MYPAL_KEYSTORE')
+    signingConfigs {
+        permanent {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword 'mypal-release'
+                keyAlias 'mypal'
+                keyPassword 'mypal-release'
+            }
+        }
+    }
+
     splits {
         abi {
             enable true
@@ -39,8 +52,8 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            // подписываем debug-ключом, чтобы APK ставился без настройки keystore
-            signingConfig signingConfigs.debug
+            // без постоянного ключа подписываем debug-ключом, чтобы APK всё равно собирался
+            signingConfig keystorePath ? signingConfigs.permanent : signingConfigs.debug
         }
     }
 
